@@ -35,6 +35,7 @@ import {
 import { MiniMap } from '@/components/game/MiniMap';
 import { TopBar, StatsPanel } from '@/components/game/TopBar';
 import { CanvasIsometricGrid } from '@/components/game/CanvasIsometricGrid';
+import { AgentBridge } from '@/components/agent/AgentBridge';
 
 // Cargo type names for notifications
 const CARGO_TYPE_NAMES = [msg('containers'), msg('bulk materials'), msg('oil')];
@@ -242,6 +243,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
     return (
       <TooltipProvider>
         <div className="w-full h-full overflow-hidden bg-background flex flex-col">
+          <AgentBridge />
           {/* Mobile Top Bar */}
           <MobileTopBar 
             selectedTile={selectedTile && state.selectedTool === 'select' ? state.grid[selectedTile.y][selectedTile.x] : null}
@@ -337,6 +339,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
   return (
     <TooltipProvider>
       <div className="w-full h-full min-h-[720px] overflow-hidden bg-background flex">
+        <AgentBridge />
         <Sidebar onExit={onExit} />
         
         <div className="flex-1 flex flex-col ml-56">

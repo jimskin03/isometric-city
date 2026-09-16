@@ -67,6 +67,7 @@ type GameContextValue = {
   setBudgetFunding: (key: keyof Budget, funding: number) => void;
   upgradeServiceBuilding: (x: number, y: number) => boolean; // Returns true if upgrade succeeded
   placeAtTile: (x: number, y: number, isRemote?: boolean) => void;
+  executeToolAtTile: (tool: Tool, x: number, y: number) => void;
   setPlaceCallback: (callback: ((args: { x: number; y: number; tool: Tool }) => void) | null) => void;
   finishTrackDrag: (pathTiles: { x: number; y: number }[], trackType: 'road' | 'rail', isRemote?: boolean) => void; // Create bridges after road/rail drag
   setBridgeCallback: (callback: ((args: { pathTiles: { x: number; y: number }[]; trackType: 'road' | 'rail' }) => void) | null) => void;
@@ -170,6 +171,74 @@ const toolZoneMap: Partial<Record<Tool, ZoneType>> = {
   zone_industrial: 'industrial',
   zone_dezone: 'none',
 };
+
+function applyToolAtTile(state: GameState, tool: Tool, x: number, y: number): GameState {
+  if (tool === 'select') return state;
+
+  const info = TOOL_INFO[tool];
+  const cost = info?.cost ?? 0;
+  const tile = state.grid[y]?.[x];
+
+  if (!tile) return state;
+  if (cost > 0 && state.stats.money < cost) return state;
+  if (tool === 'bulldoze' && tile.building.type === 'grass' && tile.zone === 'none') return state;
+
+  const building = toolBuildingMap[tool];
+  const zone = toolZoneMap[tool];
+
+  if (zone && tile.zone === zone) return state;
+  if (building && tile.building.type === building) return state;
+
+  if (tool === 'subway') {
+    if (tile.building.type === 'water' || tile.hasSubway) return state;
+    const nextState = placeSubway(state, x, y);
+    if (nextState === state) return state;
+    return {
+      ...nextState,
+      stats: { ...nextState.stats, money: nextState.stats.money - cost },
+    };
+  }
+
+  if (tool === 'zone_water') {
+    if (tile.building.type === 'water' || tile.building.type === 'bridge') return state;
+    const nextState = placeWaterTerraform(state, x, y);
+    if (nextState === state) return state;
+    return {
+      ...nextState,
+      stats: { ...nextState.stats, money: nextState.stats.money - cost },
+    };
+  }
+
+  if (tool === 'zone_land') {
+    if (tile.building.type !== 'water') return state;
+    const nextState = placeLandTerraform(state, x, y);
+    if (nextState === state) return state;
+    return {
+      ...nextState,
+      stats: { ...nextState.stats, money: nextState.stats.money - cost },
+    };
+  }
+
+  let nextState: GameState;
+  if (tool === 'bulldoze') {
+    nextState = bulldozeTile(state, x, y);
+  } else if (zone) {
+    nextState = placeBuilding(state, x, y, null, zone);
+  } else if (building) {
+    nextState = placeBuilding(state, x, y, building, null);
+  } else {
+    return state;
+  }
+
+  if (nextState === state) return state;
+  if (cost > 0) {
+    nextState = {
+      ...nextState,
+      stats: { ...nextState.stats, money: nextState.stats.money - cost },
+    };
+  }
+  return nextState;
+}
 
 // Load game state from localStorage
 // Supports both compressed (lz-string) and uncompressed (legacy) formats
@@ -876,103 +945,17 @@ export function GameProvider({ children, startFresh = false }: { children: React
     // before React batches the setState. We read from the latest state ref.
     const currentTool = latestStateRef.current.selectedTool;
     
-    setState((prev) => {
-      const tool = prev.selectedTool;
-      if (tool === 'select') return prev;
-
-      const info = TOOL_INFO[tool];
-      const cost = info?.cost ?? 0;
-      const tile = prev.grid[y]?.[x];
-
-      if (!tile) return prev;
-      if (cost > 0 && prev.stats.money < cost) return prev;
-
-      // Prevent wasted spend if nothing would change
-      if (tool === 'bulldoze' && tile.building.type === 'grass' && tile.zone === 'none') {
-        return prev;
-      }
-
-      const building = toolBuildingMap[tool];
-      const zone = toolZoneMap[tool];
-
-      if (zone && tile.zone === zone) return prev;
-      if (building && tile.building.type === building) return prev;
-      
-      // Handle subway tool separately (underground placement)
-      if (tool === 'subway') {
-        // Can't place subway under water
-        if (tile.building.type === 'water') return prev;
-        // Already has subway
-        if (tile.hasSubway) return prev;
-        
-        const nextState = placeSubway(prev, x, y);
-        if (nextState === prev) return prev;
-        
-        return {
-          ...nextState,
-          stats: { ...nextState.stats, money: nextState.stats.money - cost },
-        };
-      }
-      
-      // Handle water terraform tool separately
-      if (tool === 'zone_water') {
-        // Already water - do nothing
-        if (tile.building.type === 'water') return prev;
-        // Don't allow terraforming bridges - would break them
-        if (tile.building.type === 'bridge') return prev;
-        
-        const nextState = placeWaterTerraform(prev, x, y);
-        if (nextState === prev) return prev;
-        
-        return {
-          ...nextState,
-          stats: { ...nextState.stats, money: nextState.stats.money - cost },
-        };
-      }
-      
-      // Handle land terraform tool separately
-      if (tool === 'zone_land') {
-        // Only works on water
-        if (tile.building.type !== 'water') return prev;
-        
-        const nextState = placeLandTerraform(prev, x, y);
-        if (nextState === prev) return prev;
-        
-        return {
-          ...nextState,
-          stats: { ...nextState.stats, money: nextState.stats.money - cost },
-        };
-      }
-
-      let nextState: GameState;
-
-      if (tool === 'bulldoze') {
-        nextState = bulldozeTile(prev, x, y);
-      } else if (zone) {
-        nextState = placeBuilding(prev, x, y, null, zone);
-      } else if (building) {
-        nextState = placeBuilding(prev, x, y, building, null);
-      } else {
-        return prev;
-      }
-
-      if (nextState === prev) return prev;
-
-      if (cost > 0) {
-        nextState = {
-          ...nextState,
-          stats: { ...nextState.stats, money: nextState.stats.money - cost },
-        };
-      }
-
-      return nextState;
-    });
+    setState((prev) => applyToolAtTile(prev, prev.selectedTool, x, y));
     
     // Broadcast to multiplayer if this is a local action (not remote)
     // We use the tool captured before setState since React 18 batches async
     if (!isRemote && currentTool !== 'select' && placeCallbackRef.current) {
       placeCallbackRef.current({ x, y, tool: currentTool });
     }
+  }, []);
+
+  const executeToolAtTile = useCallback((tool: Tool, x: number, y: number) => {
+    setState((prev) => applyToolAtTile(prev, tool, x, y));
   }, []);
 
   const upgradeServiceBuildingHandler = useCallback((x: number, y: number) => {
@@ -1638,6 +1621,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
     setActivePanel,
     setBudgetFunding,
     placeAtTile,
+    executeToolAtTile,
     upgradeServiceBuilding: upgradeServiceBuildingHandler,
     setPlaceCallback,
     finishTrackDrag,

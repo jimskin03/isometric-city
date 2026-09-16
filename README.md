@@ -36,9 +36,33 @@ Open `http://localhost:3000`.
 
 For production validation, `npx next build` runs the Next.js build directly. The repository's `npm run build` also runs the image-compression script first and therefore requires a working platform-specific Sharp installation.
 
+## Agent play
+
+Paradise City exposes an agent bridge so a headless planner can inspect the city and build through legal game actions rather than mouse automation.
+
+Agent-facing endpoints:
+
+- `GET /api/agent/instructions` — planner instructions (not rendered in the human UI)
+- `GET /api/agent/state` — current semantic city snapshot, ASCII map, stats, buildings, and active session ID
+- `POST /api/agent/commands` — queue a legal city action for the active browser session
+
+CLI examples:
+
+```bash
+npm run agent -- instructions --url https://isometric-city.onrender.com
+npm run agent -- state --url https://isometric-city.onrender.com
+npm run agent -- bootstrap --url https://isometric-city.onrender.com
+npm run agent -- place road 20 20 --url https://isometric-city.onrender.com
+npm run agent -- speed 2 --url https://isometric-city.onrender.com
+```
+
+Set `PARADISE_AGENT_TOKEN` on the server and in the agent environment to protect command writes. If no token is configured, command writes are intentionally open for development.
+
+When a genuinely blank city opens, the built-in founder planner automatically establishes a small starter road/zoning district and starts simulation speed 2. It uses the same placement and treasury rules as human construction, so the world can begin without waiting for a human player.
+
 ## Project direction
 
-Paradise City remains a city builder. Future agentic support should integrate through explicit simulation/control APIs rather than replacing the city-building gameplay with a character-control game.
+Paradise City remains a city builder. Agentic support operates the city-building simulation through explicit state and command APIs rather than replacing the game with character control.
 
 ## Upstream
 
