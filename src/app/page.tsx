@@ -478,7 +478,7 @@ export default function HomePage() {
           
           {/* Title - smaller on very small screens */}
           <h1 className="text-4xl sm:text-5xl font-light tracking-wider text-white/90 mb-4 sm:mb-6 flex-shrink-0">
-            IsoCity
+            Paradise City
           </h1>
           
           {/* Sprite Gallery - smaller on mobile, contained */}
@@ -594,7 +594,7 @@ export default function HomePage() {
           {/* Left - Title and Start Button */}
           <div className="flex flex-col items-center lg:items-start justify-center space-y-12">
             <h1 className="text-8xl font-light tracking-wider text-white/90">
-              IsoCity
+              Paradise City
             </h1>
             <div className="flex flex-col gap-3">
               <Button 

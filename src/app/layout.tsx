@@ -20,24 +20,23 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://iso-city.com'),
   title: {
-    default: 'ISOCITY — Metropolis Builder',
-    template: 'ISOCITY — %s',
+    default: 'Paradise City',
+    template: 'Paradise City — %s',
   },
-  description: 'A richly detailed isometric city builder. Build your metropolis and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
+  description: 'Paradise City is a compact isometric city-building simulation in the CryptGreg universe.',
   openGraph: {
-    title: 'ISOCITY — Metropolis Builder',
-    description: 'A richly detailed isometric city builder. Build your metropolis and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
+    title: 'Paradise City',
+    description: 'A compact isometric city-building simulation in the CryptGreg universe.',
     type: 'website',
-    siteName: 'IsoCity',
+    siteName: 'Paradise City',
     images: [
       {
         url: '/opengraph-image.png',
         width: 1179,
         height: 1406,
         type: 'image/png',
-        alt: 'ISOCITY - Isometric city builder game screenshot'
+        alt: 'Paradise City isometric city builder screenshot'
       }
     ],
   },
@@ -48,7 +47,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'IsoCity'
+    title: 'Paradise City'
   },
   formatDetection: {
     telephone: false
