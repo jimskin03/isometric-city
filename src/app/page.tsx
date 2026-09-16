@@ -12,10 +12,11 @@ import { SavedCityMeta, GameState } from '@/types/game';
 import { decompressFromUTF16, compressToUTF16 } from 'lz-string';
 import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { T } from 'gt-next';
-import { Users, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { PARADISE_CITY } from '@/config/paradise';
 
-const STORAGE_KEY = 'isocity-game-state';
-const SAVED_CITIES_INDEX_KEY = 'isocity-saved-cities-index';
+const STORAGE_KEY = PARADISE_CITY.storage.gameState;
+const SAVED_CITIES_INDEX_KEY = PARADISE_CITY.storage.savedCitiesIndex;
 
 // Background color to filter from sprite sheets (red)
 const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
@@ -314,7 +315,7 @@ function SavedCityCard({ city, onLoad, onDelete }: { city: SavedCityMeta; onLoad
   );
 }
 
-const SAVED_CITY_PREFIX = 'isocity-city-';
+const SAVED_CITY_PREFIX = PARADISE_CITY.storage.savedCityPrefix;
 
 export default function HomePage() {
   const [showGame, setShowGame] = useState(false);
@@ -322,7 +323,6 @@ export default function HomePage() {
   const [savedCities, setSavedCities] = useState<SavedCityMeta[]>([]);
   const [hasSaved, setHasSaved] = useState(false);
   const [showCoopModal, setShowCoopModal] = useState(false);
-  const [isMultiplayer, setIsMultiplayer] = useState(false);
   const [startFreshGame, setStartFreshGame] = useState(false);
   const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
   const { isMobileDevice, isSmallScreen } = useMobile();
@@ -353,7 +353,6 @@ export default function HomePage() {
   // Handle exit from game - refresh saved cities list
   const handleExitGame = () => {
     setShowGame(false);
-    setIsMultiplayer(false);
     setStartFreshGame(false);
     setSavedCities(loadSavedCities());
     setHasSaved(hasSavedGame());
@@ -402,8 +401,6 @@ export default function HomePage() {
 
   // Handle co-op game start
   const handleCoopStart = (isHost: boolean, initialState?: GameState, roomCode?: string) => {
-    setIsMultiplayer(true);
-    
     if (isHost && initialState) {
       // Host starts with the state they created - save it so GameProvider loads it
       try {
@@ -478,7 +475,7 @@ export default function HomePage() {
           
           {/* Title - smaller on very small screens */}
           <h1 className="text-4xl sm:text-5xl font-light tracking-wider text-white/90 mb-4 sm:mb-6 flex-shrink-0">
-            Paradise City
+            {PARADISE_CITY.name}
           </h1>
           
           {/* Sprite Gallery - smaller on mobile, contained */}
@@ -526,24 +523,14 @@ export default function HomePage() {
               <T>Load Example</T>
             </Button>
             <div className="flex items-start justify-between w-full">
-              <div className="flex flex-col">
-                <a
-                  href="https://cursor.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
-                >
-                  <T>Made with Cursor</T>
-                </a>
-                <a
-                  href="https://github.com/amilich/isometric-city"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
-                >
-                  <T>Open GitHub</T>
-                </a>
-              </div>
+              <a
+                href="https://github.com/jimskin03/isometric-city"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
+              >
+                <T>Open GitHub</T>
+              </a>
               <LanguageSelector variant="ghost" className="text-white/40 hover:text-white/70 hover:bg-white/10" />
             </div>
           </div>
@@ -594,7 +581,7 @@ export default function HomePage() {
           {/* Left - Title and Start Button */}
           <div className="flex flex-col items-center lg:items-start justify-center space-y-12">
             <h1 className="text-8xl font-light tracking-wider text-white/90">
-              Paradise City
+              {PARADISE_CITY.name}
             </h1>
             <div className="flex flex-col gap-3">
               <Button 
@@ -633,24 +620,14 @@ export default function HomePage() {
                 <T>Load Example</T>
               </Button>
               <div className="flex items-start justify-between w-64">
-                <div className="flex flex-col">
-                  <a
-                    href="https://cursor.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
-                  >
-                    <T>Made with Cursor</T>
-                  </a>
-                  <a
-                    href="https://github.com/amilich/isometric-city"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
-                  >
-                    <T>Open GitHub</T>
-                  </a>
-                </div>
+                <a
+                  href="https://github.com/jimskin03/isometric-city"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-left py-2 text-sm font-light tracking-wide text-white/40 hover:text-white/70 transition-colors duration-200"
+                >
+                  <T>Open GitHub</T>
+                </a>
                 <LanguageSelector variant="ghost" className="text-white/40 hover:text-white/70 hover:bg-white/10" />
               </div>
             </div>

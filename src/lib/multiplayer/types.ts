@@ -1,12 +1,9 @@
 // Multiplayer types for co-op gameplay
 
-import { Tool as IsoCityTool, GameState as IsoCityGameState, Budget } from '@/types/game';
-import { Tool as CoasterTool, GameState as CoasterGameState } from '@/games/coaster/types';
-import { ParkSettings } from '@/games/coaster/types/economy';
-import { CoasterType } from '@/games/coaster/types/tracks';
+import { Tool, GameState, Budget } from '@/types/game';
 
-export type MultiplayerGameState = IsoCityGameState | CoasterGameState;
-export type MultiplayerTool = IsoCityTool | CoasterTool;
+export type MultiplayerGameState = GameState;
+export type MultiplayerTool = Tool;
 
 // Base action properties
 interface BaseAction {
@@ -24,10 +21,6 @@ export type GameAction =
   | (BaseAction & { type: 'setSpeed'; speed: 0 | 1 | 2 | 3 })
   | (BaseAction & { type: 'setDisasters'; enabled: boolean })
   | (BaseAction & { type: 'createBridges'; pathTiles: Array<{ x: number; y: number }>; trackType: 'road' | 'rail' })
-  | (BaseAction & { type: 'setParkSettings'; settings: Partial<ParkSettings> })
-  | (BaseAction & { type: 'coasterStartBuild'; coasterType: CoasterType; coasterId: string })
-  | (BaseAction & { type: 'coasterFinishBuild' })
-  | (BaseAction & { type: 'coasterCancelBuild' })
   | (BaseAction & { type: 'fullState'; state: MultiplayerGameState })
   | (BaseAction & { type: 'tick'; tickData: TickData });
 
@@ -40,10 +33,6 @@ export type SetBudgetAction = { type: 'setBudget'; key: keyof Budget; funding: n
 export type SetSpeedAction = { type: 'setSpeed'; speed: 0 | 1 | 2 | 3 };
 export type SetDisastersAction = { type: 'setDisasters'; enabled: boolean };
 export type CreateBridgesAction = { type: 'createBridges'; pathTiles: Array<{ x: number; y: number }>; trackType: 'road' | 'rail' };
-export type SetParkSettingsAction = { type: 'setParkSettings'; settings: Partial<ParkSettings> };
-export type CoasterStartBuildAction = { type: 'coasterStartBuild'; coasterType: CoasterType; coasterId: string };
-export type CoasterFinishBuildAction = { type: 'coasterFinishBuild' };
-export type CoasterCancelBuildAction = { type: 'coasterCancelBuild' };
 export type FullStateAction = { type: 'fullState'; state: MultiplayerGameState };
 export type TickAction = { type: 'tick'; tickData: TickData };
 
@@ -56,10 +45,6 @@ export type GameActionInput =
   | SetSpeedAction
   | SetDisastersAction
   | CreateBridgesAction
-  | SetParkSettingsAction
-  | CoasterStartBuildAction
-  | CoasterFinishBuildAction
-  | CoasterCancelBuildAction
   | FullStateAction
   | TickAction;
 
@@ -70,12 +55,12 @@ export interface TickData {
   day: number;
   hour: number;
   tick: number;
-  stats: IsoCityGameState['stats'];
+  stats: GameState['stats'];
   // Only send changed tiles to minimize bandwidth
   changedTiles?: Array<{
     x: number;
     y: number;
-    tile: IsoCityGameState['grid'][0][0];
+    tile: GameState['grid'][0][0];
   }>;
 }
 

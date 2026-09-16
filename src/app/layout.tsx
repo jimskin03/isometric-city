@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { getLocale } from "gt-next/server";
 import { GTProvider } from "gt-next";
+import { PARADISE_CITY } from '@/config/paradise';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -21,15 +22,15 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Paradise City',
-    template: 'Paradise City — %s',
+    default: PARADISE_CITY.name,
+    template: `${PARADISE_CITY.name} — %s`,
   },
-  description: 'Paradise City is a compact isometric city-building simulation in the CryptGreg universe.',
+  description: PARADISE_CITY.description,
   openGraph: {
-    title: 'Paradise City',
-    description: 'A compact isometric city-building simulation in the CryptGreg universe.',
+    title: PARADISE_CITY.name,
+    description: PARADISE_CITY.description,
     type: 'website',
-    siteName: 'Paradise City',
+    siteName: PARADISE_CITY.name,
     images: [
       {
         url: '/opengraph-image.png',
@@ -47,7 +48,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Paradise City'
+    title: PARADISE_CITY.name
   },
   formatDetection: {
     telephone: false

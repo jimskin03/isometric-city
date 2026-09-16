@@ -1,75 +1,48 @@
-# IsoCity & IsoCoaster
+# Paradise City
 
-Open-source isometric city and theme park builder built with NextJS, TypeScript, and HTML5 Canvas.
+Paradise City is a compact isometric city-building simulation built with Next.js, TypeScript, and HTML5 Canvas. This branch is the dedicated Paradise City codebase: the separate theme-park/coaster game has been removed so the city simulation can evolve independently.
 
-<table>
-<tr>
-<td width="50%" align="center"><strong>IsoCity</strong></td>
-<td width="50%" align="center"><strong>IsoCoaster</strong></td>
-</tr>
-<tr>
-<td><img src="public/readme-image.png" width="100%"></td>
-<td><img src="public/readme-coaster.png" width="100%"></td>
-</tr>
-<tr>
-<td align="center">City builder with trains, planes, cars, and pedestrians<br><a href="https://iso-city.com">iso-city.com</a></td>
-<td align="center">Theme park builder with roller coasters, rides, and guests<br><a href="https://iso-coaster.com">iso-coaster.com</a></td>
-</tr>
-</table>
+![Paradise City](public/readme-image.png)
 
-Made with [Cursor](https://cursor.com).
+## Core features
 
-## Features
+- **Isometric rendering engine** — HTML5 Canvas rendering with depth sorting, layers, sprites, zoom, and mobile controls.
+- **City simulation** — residential, commercial, and industrial zoning with economy and growth logic.
+- **Transport simulation** — roads, rail, cars, trains, buses, aircraft, boats, bridges, and pedestrians.
+- **City services** — utilities, education, health, police, fire, parks, and civic buildings.
+- **Persistent cities** — local save/load support for multiple cities.
+- **Co-op foundation** — the existing city multiplayer layer is retained for future Paradise City human/agent interaction.
+- **Paradise configuration seam** — product identity and persistence keys are centralized in `src/config/paradise.ts` so auth, agent, and world configuration can be added without spreading constants across the app.
 
--   **Isometric Rendering Engine**: Rendering with HTML5 Canvas (`CanvasIsometricGrid`) capable of handling complex depth sorting, layer management, and both image and canvas sprites.
--   **Dynamic Simulation**:
-    -   **Traffic System**: Autonomous vehicles including cars, trains, planes, buses, and seaplanes.
-    -   **Trains, bridges, buses, barges, and more**: Vehicles will navigate throughout your city and respect traffic lights.
-    -   **Pedestrian System**: Pathfinding and crowd simulation for city inhabitants.
-    -   **Economy & Resources**: Resource management, zoning (Residential, Commercial, Industrial), and city growth logic.
--   **Interactive Grid**: Tile-based placement system for buildings, roads, rail, parks, utilities, and more.
--   **State Management**: Save and load functionality for multiple cities.
--   **Responsive Design**: Mobile-friendly interface with touch friendly controls, drawers, and toolbars.
+## Tech stack
 
-## Tech Stack
+- Next.js 16 + React 19
+- TypeScript
+- HTML5 Canvas
+- Tailwind CSS / Radix UI
+- Supabase client support
 
--   **Framework**: [Next.js 16](https://nextjs.org/)
--   **Language**: [TypeScript](https://www.typescriptlang.org/)
--   **Graphics**: HTML5 Canvas (No external game engine libraries; pure native implementation).
--   **Icons**: Lucide React icons.
+## Development
 
-## Getting Started
+```bash
+git clone https://github.com/jimskin03/isometric-city.git
+cd isometric-city
+git checkout paradise-city-base
+npm install
+npm run dev
+```
 
-### Prerequisites
+Open `http://localhost:3000`.
 
--   Node.js (v18 or higher)
--   npm
+For production validation, `npx next build` runs the Next.js build directly. The repository's `npm run build` also runs the image-compression script first and therefore requires a working platform-specific Sharp installation.
 
-### Installation
+## Project direction
 
-1.  **Clone the repository**
-    ```bash
-    git clone https://github.com/amilich/isometric-city.git
-    cd isometric-city
-    ```
+Paradise City remains a city builder. Future agentic support should integrate through explicit simulation/control APIs rather than replacing the city-building gameplay with a character-control game.
 
-2.  **Install dependencies**
-    ```bash
-    npm install
-    ```
+## Upstream
 
-3.  **Run the development server**
-    ```bash
-    npm run dev
-    ```
-
-4.  **Open the game**
-    Visit [http://localhost:3000](http://localhost:3000) to play IsoCity. 
-    Visit [http://localhost:3000/coaster](http://localhost:3000/coaster) for IsoCoaster.
-
-## Contributing
-
-Contributions, bug reports, and feature requests are welcome.
+Paradise City is derived from the open-source [amilich/isometric-city](https://github.com/amilich/isometric-city) project. The original upstream also included IsoCoaster; that independent game subsystem is intentionally not part of the Paradise City branch.
 
 ## License
 

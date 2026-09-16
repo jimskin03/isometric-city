@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
+import { PARADISE_CITY } from '@/config/paradise';
 
 export const metadata: Metadata = {
-  title: { absolute: 'OG Preview — IsoCity' },
+  title: { absolute: `OG Preview — ${PARADISE_CITY.name}` },
   robots: 'noindex, nofollow',
 };
 
