@@ -90,6 +90,7 @@ export interface RoomData {
   cityName: string;
   createdAt: number;
   playerCount: number;
+  stateRevision?: number;
 }
 
 export interface AwarenessState {

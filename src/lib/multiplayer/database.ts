@@ -73,6 +73,7 @@ export interface GameRoomRow {
   created_at: string;
   updated_at: string;
   player_count: number;
+  state_revision: number;
 }
 
 /**
@@ -103,6 +104,7 @@ export async function createGameRoom(
         game_state: compressed,
         player_count: 1,
         created_by: createdBy || null,
+        state_revision: 0,
       });
 
     if (error) {
@@ -126,13 +128,13 @@ export async function createGameRoom(
  */
 export async function loadGameRoom(
   roomCode: string
-): Promise<{ gameState: MultiplayerGameState; cityName: string } | null> {
+): Promise<{ gameState: MultiplayerGameState; cityName: string; stateRevision: number } | null> {
   const supabase = getSupabaseClient();
   if (!supabase) return null;
   try {
     const { data, error } = await supabase
       .from('game_rooms')
-      .select('game_state, city_name')
+      .select('game_state, city_name, state_revision')
       .eq('room_code', roomCode.toUpperCase())
       .single();
 
@@ -148,7 +150,11 @@ export async function loadGameRoom(
     }
 
     const gameState = JSON.parse(decompressed) as MultiplayerGameState;
-    return { gameState, cityName: data.city_name };
+    return {
+      gameState,
+      cityName: data.city_name,
+      stateRevision: Number(data.state_revision || 0),
+    };
   } catch (e) {
     console.error('[Database] Error loading room:', e);
     return null;
@@ -162,7 +168,9 @@ export async function loadGameRoom(
  */
 export async function updateGameRoom(
   roomCode: string,
-  gameState: MultiplayerGameState
+  gameState: MultiplayerGameState,
+  expectedRevision: number,
+  nextRevision: number
 ): Promise<boolean> {
   const supabase = getSupabaseClient();
   if (!supabase) return false;
@@ -173,17 +181,29 @@ export async function updateGameRoom(
     // Check if city size exceeds limit before saving
     checkCitySize(compressed);
     
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('game_rooms')
-      .update({ game_state: compressed })
-      .eq('room_code', roomCode.toUpperCase());
+      .update({ game_state: compressed, state_revision: nextRevision })
+      .eq('room_code', roomCode.toUpperCase())
+      .eq('state_revision', expectedRevision)
+      .select('state_revision')
+      .maybeSingle();
 
     if (error) {
       console.error('[Database] Failed to update room:', error);
       return false;
     }
 
-    return true;
+    if (!data) {
+      console.warn('[Database] Rejected stale room update:', {
+        roomCode: roomCode.toUpperCase(),
+        expectedRevision,
+        nextRevision,
+      });
+      return false;
+    }
+
+    return Number(data.state_revision) === nextRevision;
   } catch (e) {
     // Re-throw CitySizeLimitError so callers can handle it specifically
     if (e instanceof CitySizeLimitError) {

@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
 import { useGame } from '@/context/GameContext';
-import { GameAction, GameActionInput } from '@/lib/multiplayer/types';
+import { GameAction, GameActionInput, MultiplayerGameState } from '@/lib/multiplayer/types';
 import { Tool, Budget, GameState, SavedCityMeta } from '@/types/game';
 
 // Batch placement buffer for reducing message count during drags
@@ -73,27 +73,29 @@ export function useMultiplayerSync() {
     multiplayerRef.current = multiplayer;
   }, [multiplayer]);
 
-  // Load initial state when joining a room (received from other players)
-  // This can happen even if we already loaded from cache - network state takes priority
-  const lastInitialStateRef = useRef<string | null>(null);
+  // Load canonical state snapshots from the room authority. A new object means a
+  // new database revision, even if the simulation is paused and tick is unchanged.
+  const lastInitialStateRef = useRef<MultiplayerGameState | null>(null);
+  const canonicalRoomState = multiplayer?.initialState ?? null;
   useEffect(() => {
-    if (!multiplayer || !multiplayer.initialState) return;
-    
-    // Only load if this is a new state (prevent duplicate loads of same state)
-    const stateKey = JSON.stringify(multiplayer.initialState.tick || 0);
-    if (lastInitialStateRef.current === stateKey && initialStateLoadedRef.current) return;
-    
-    console.log('[useMultiplayerSync] Received initial state from network, loading...');
-    
-    // Use loadState to load the received game state
-    const stateString = JSON.stringify(multiplayer.initialState);
-    const success = game.loadState(stateString);
-    
+    if (!canonicalRoomState) return;
+    if (lastInitialStateRef.current === canonicalRoomState && initialStateLoadedRef.current) return;
+
+    console.log('[useMultiplayerSync] Received canonical room state, loading...');
+
+    // Keep UI-local selection/panel state while replacing the shared simulation.
+    const canonicalState = {
+      ...canonicalRoomState,
+      selectedTool: game.state.selectedTool,
+      activePanel: game.state.activePanel,
+    };
+    const success = game.loadState(JSON.stringify(canonicalState));
+
     if (success) {
       initialStateLoadedRef.current = true;
-      lastInitialStateRef.current = stateKey;
+      lastInitialStateRef.current = canonicalRoomState;
     }
-  }, [multiplayer?.initialState, game]);
+  }, [canonicalRoomState, game]);
 
   // Apply a remote action to the local game state
   const applyRemoteAction = useCallback((action: GameAction) => {
@@ -133,19 +135,19 @@ export function useMultiplayerSync() {
       }
         
       case 'setTaxRate':
-        game.setTaxRate(action.rate);
+        game.setTaxRate(action.rate, true);
         break;
         
       case 'setBudget':
-        game.setBudgetFunding(action.key, action.funding);
+        game.setBudgetFunding(action.key, action.funding, true);
         break;
         
       case 'setSpeed':
-        game.setSpeed(action.speed);
+        game.setSpeed(action.speed, true);
         break;
         
       case 'setDisasters':
-        game.setDisastersEnabled(action.enabled);
+        game.setDisastersEnabled(action.enabled, true);
         break;
         
       case 'createBridges':
@@ -247,6 +249,18 @@ export function useMultiplayerSync() {
     };
   }, [multiplayer, multiplayer?.connectionState, game, flushPlacements]);
 
+  // Register callback for shared simulation controls. All UI surfaces and agents
+  // use GameContext setters, so this is the single broadcast path for controls.
+  useEffect(() => {
+    if (!multiplayer || multiplayer.connectionState !== 'connected') {
+      game.setControlCallback(null);
+      return;
+    }
+
+    game.setControlCallback((action) => multiplayer.dispatchAction(action));
+    return () => game.setControlCallback(null);
+  }, [multiplayer, multiplayer?.connectionState, game]);
+
   // Register callback to broadcast bridge creation
   useEffect(() => {
     if (!multiplayer || multiplayer.connectionState !== 'connected') {
@@ -275,8 +289,8 @@ export function useMultiplayerSync() {
     if (now - lastUpdateRef.current < 2000) return; // Throttle to 2 second intervals
     lastUpdateRef.current = now;
     
-    // Update the game state - provider will save to Supabase database (throttled)
-    multiplayer.updateGameState(game.state);
+    // Only the elected authority persists canonical simulation state.
+    if (multiplayer.isHost) multiplayer.updateGameState(game.state);
     
     // Also update the local saved cities index (less frequently - every 10 seconds)
     if (multiplayer.roomCode && now - lastIndexUpdateRef.current > 10000) {

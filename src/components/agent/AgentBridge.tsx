@@ -133,19 +133,25 @@ export function AgentBridge() {
     const publishTimer = window.setInterval(() => void publish(), 2000);
     const pollTimer = window.setInterval(() => void poll(), 750);
 
-    const founderTimer = window.setTimeout(() => {
-      if (!founderStartedRef.current && isBlankCity(latestStateRef.current)) {
-        founderStartedRef.current = true;
-        executeFounder();
-        window.setTimeout(() => void publish(), 250);
+    const founderTimer = window.setInterval(() => {
+      if (founderStartedRef.current || !isBlankCity(latestStateRef.current)) {
+        window.clearInterval(founderTimer);
+        return;
       }
+      const mp = multiplayerRef.current;
+      if (mp?.connectionState === 'connected' && !mp.isHost) return;
+
+      founderStartedRef.current = true;
+      executeFounder();
+      window.clearInterval(founderTimer);
+      window.setTimeout(() => void publish(), 250);
     }, 1200);
 
     return () => {
       stopped = true;
       window.clearInterval(publishTimer);
       window.clearInterval(pollTimer);
-      window.clearTimeout(founderTimer);
+      window.clearInterval(founderTimer);
     };
   }, [addNotification, executeToolAtTile, isStateReady, latestStateRef, setSpeed, setTaxRate]);
 

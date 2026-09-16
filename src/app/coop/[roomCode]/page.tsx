@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { GameProvider } from '@/context/GameContext';
-import { MultiplayerContextProvider } from '@/context/MultiplayerContext';
+import { MultiplayerContextProvider, useMultiplayer } from '@/context/MultiplayerContext';
 import Game from '@/components/Game';
 import { CoopModal } from '@/components/multiplayer/CoopModal';
 import { GameState } from '@/types/game';
@@ -45,6 +45,18 @@ function saveCityToIndex(state: GameState, roomCode?: string): void {
   } catch (e) {
     console.error('Failed to save city to index:', e);
   }
+}
+
+function SharedGameRuntime({ startFreshGame, onExit }: { startFreshGame: boolean; onExit: () => void }) {
+  const { isHost, connectionState } = useMultiplayer();
+
+  return (
+    <GameProvider simulationEnabled={connectionState === 'connected' && isHost} startFresh={startFreshGame}>
+      <main className="h-screen w-screen overflow-hidden">
+        <Game onExit={onExit} />
+      </main>
+    </GameProvider>
+  );
 }
 
 export default function CoopPage() {
@@ -110,29 +122,20 @@ export default function CoopPage() {
     setShowCoopModal(open);
   };
 
-  if (showGame) {
-    return (
-      <MultiplayerContextProvider>
-        <GameProvider startFresh={startFreshGame}>
-          <main className="h-screen w-screen overflow-hidden">
-            <Game onExit={handleExitGame} />
-          </main>
-        </GameProvider>
-      </MultiplayerContextProvider>
-    );
-  }
-
-  // Show the coop modal with the room code pre-filled
   return (
     <MultiplayerContextProvider>
-      <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <CoopModal
-          open={showCoopModal}
-          onOpenChange={handleModalClose}
-          onStartGame={handleCoopStart}
-          pendingRoomCode={roomCode}
-        />
-      </main>
+      {showGame ? (
+        <SharedGameRuntime startFreshGame={startFreshGame} onExit={handleExitGame} />
+      ) : (
+        <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+          <CoopModal
+            open={showCoopModal}
+            onOpenChange={handleModalClose}
+            onStartGame={handleCoopStart}
+            pendingRoomCode={roomCode}
+          />
+        </main>
+      )}
     </MultiplayerContextProvider>
   );
 }

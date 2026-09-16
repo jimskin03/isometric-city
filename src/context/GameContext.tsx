@@ -55,26 +55,33 @@ export type SavedCityInfo = {
   savedAt: number;
 } | null;
 
+type SharedControlAction =
+  | { type: 'setSpeed'; speed: 0 | 1 | 2 | 3 }
+  | { type: 'setTaxRate'; rate: number }
+  | { type: 'setBudget'; key: keyof Budget; funding: number }
+  | { type: 'setDisasters'; enabled: boolean };
+
 type GameContextValue = {
   state: GameState;
   // PERF: Ref to latest state for real-time access without React re-renders
   // Canvas should use this instead of state.grid for smooth updates
   latestStateRef: React.RefObject<GameState>;
   setTool: (tool: Tool) => void;
-  setSpeed: (speed: 0 | 1 | 2 | 3) => void;
-  setTaxRate: (rate: number) => void;
+  setSpeed: (speed: 0 | 1 | 2 | 3, isRemote?: boolean) => void;
+  setTaxRate: (rate: number, isRemote?: boolean) => void;
   setActivePanel: (panel: GameState['activePanel']) => void;
-  setBudgetFunding: (key: keyof Budget, funding: number) => void;
+  setBudgetFunding: (key: keyof Budget, funding: number, isRemote?: boolean) => void;
   upgradeServiceBuilding: (x: number, y: number) => boolean; // Returns true if upgrade succeeded
   placeAtTile: (x: number, y: number, isRemote?: boolean) => void;
   executeToolAtTile: (tool: Tool, x: number, y: number) => void;
   setPlaceCallback: (callback: ((args: { x: number; y: number; tool: Tool }) => void) | null) => void;
   finishTrackDrag: (pathTiles: { x: number; y: number }[], trackType: 'road' | 'rail', isRemote?: boolean) => void; // Create bridges after road/rail drag
   setBridgeCallback: (callback: ((args: { pathTiles: { x: number; y: number }[]; trackType: 'road' | 'rail' }) => void) | null) => void;
+  setControlCallback: (callback: ((action: SharedControlAction) => void) | null) => void;
   connectToCity: (cityId: string) => void;
   discoverCity: (cityId: string) => void;
   checkAndDiscoverCities: (onDiscover?: (city: { id: string; direction: 'north' | 'south' | 'east' | 'west'; name: string }) => void) => void;
-  setDisastersEnabled: (enabled: boolean) => void;
+  setDisastersEnabled: (enabled: boolean, isRemote?: boolean) => void;
   newGame: (name?: string, size?: number) => void;
   loadState: (stateString: string) => boolean;
   exportState: () => string;
@@ -715,7 +722,7 @@ function deleteCityState(cityId: string): void {
   }
 }
 
-export function GameProvider({ children, startFresh = false }: { children: React.ReactNode; startFresh?: boolean }) {
+export function GameProvider({ children, startFresh = false, simulationEnabled = true }: { children: React.ReactNode; startFresh?: boolean; simulationEnabled?: boolean }) {
   // Start with a default state, we'll load from localStorage after mount (unless startFresh is true)
   const [state, setState] = useState<GameState>(() => createInitialGameState(DEFAULT_GRID_SIZE, PARADISE_CITY.defaultCityName));
   
@@ -729,6 +736,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
   // Callback for multiplayer action broadcast
   const placeCallbackRef = useRef<((args: { x: number; y: number; tool: Tool }) => void) | null>(null);
   const bridgeCallbackRef = useRef<((args: { pathTiles: { x: number; y: number }[]; trackType: 'road' | 'rail' }) => void) | null>(null);
+  const controlCallbackRef = useRef<((action: SharedControlAction) => void) | null>(null);
   
   // Sprite pack state
   const [currentSpritePack, setCurrentSpritePack] = useState<SpritePack>(() => getSpritePack(DEFAULT_SPRITE_PACK_ID));
@@ -867,7 +875,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
 
-    if (state.speed > 0) {
+    if (simulationEnabled && state.speed > 0) {
       // Check if running on mobile for performance optimization
       const isMobileDevice = typeof window !== 'undefined' && (
         window.innerWidth < 768 ||
@@ -905,18 +913,21 @@ export function GameProvider({ children, startFresh = false }: { children: React
         clearInterval(timer);
       }
     };
-  }, [state.speed]);
+  }, [state.speed, simulationEnabled]);
 
   const setTool = useCallback((tool: Tool) => {
     setState((prev) => ({ ...prev, selectedTool: tool, activePanel: 'none' }));
   }, []);
 
-  const setSpeed = useCallback((speed: 0 | 1 | 2 | 3) => {
+  const setSpeed = useCallback((speed: 0 | 1 | 2 | 3, isRemote = false) => {
     setState((prev) => ({ ...prev, speed }));
+    if (!isRemote) controlCallbackRef.current?.({ type: 'setSpeed', speed });
   }, []);
 
-  const setTaxRate = useCallback((rate: number) => {
-    setState((prev) => ({ ...prev, taxRate: clamp(rate, 0, 100) }));
+  const setTaxRate = useCallback((rate: number, isRemote = false) => {
+    const clamped = clamp(rate, 0, 100);
+    setState((prev) => ({ ...prev, taxRate: clamped }));
+    if (!isRemote) controlCallbackRef.current?.({ type: 'setTaxRate', rate: clamped });
   }, []);
 
   const setActivePanel = useCallback(
@@ -927,7 +938,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
   );
 
   const setBudgetFunding = useCallback(
-    (key: keyof Budget, funding: number) => {
+    (key: keyof Budget, funding: number, isRemote = false) => {
       const clamped = clamp(funding, 0, 100);
       setState((prev) => ({
         ...prev,
@@ -936,6 +947,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
           [key]: { ...prev.budget[key], funding: clamped },
         },
       }));
+      if (!isRemote) controlCallbackRef.current?.({ type: 'setBudget', key, funding: clamped });
     },
     [],
   );
@@ -956,6 +968,9 @@ export function GameProvider({ children, startFresh = false }: { children: React
 
   const executeToolAtTile = useCallback((tool: Tool, x: number, y: number) => {
     setState((prev) => applyToolAtTile(prev, tool, x, y));
+    if (tool !== 'select' && placeCallbackRef.current) {
+      placeCallbackRef.current({ x, y, tool });
+    }
   }, []);
 
   const upgradeServiceBuildingHandler = useCallback((x: number, y: number) => {
@@ -1077,8 +1092,9 @@ export function GameProvider({ children, startFresh = false }: { children: React
     });
   }, []);
 
-  const setDisastersEnabled = useCallback((enabled: boolean) => {
+  const setDisastersEnabled = useCallback((enabled: boolean, isRemote = false) => {
     setState((prev) => ({ ...prev, disastersEnabled: enabled }));
+    if (!isRemote) controlCallbackRef.current?.({ type: 'setDisasters', enabled });
   }, []);
   
   const setPlaceCallback = useCallback((callback: ((args: { x: number; y: number; tool: Tool }) => void) | null) => {
@@ -1087,6 +1103,10 @@ export function GameProvider({ children, startFresh = false }: { children: React
 
   const setBridgeCallback = useCallback((callback: ((args: { pathTiles: { x: number; y: number }[]; trackType: 'road' | 'rail' }) => void) | null) => {
     bridgeCallbackRef.current = callback;
+  }, []);
+
+  const setControlCallback = useCallback((callback: ((action: SharedControlAction) => void) | null) => {
+    controlCallbackRef.current = callback;
   }, []);
 
   const setSpritePack = useCallback((packId: string) => {
@@ -1626,6 +1646,7 @@ export function GameProvider({ children, startFresh = false }: { children: React
     setPlaceCallback,
     finishTrackDrag,
     setBridgeCallback,
+    setControlCallback,
     connectToCity,
     discoverCity,
     checkAndDiscoverCities,

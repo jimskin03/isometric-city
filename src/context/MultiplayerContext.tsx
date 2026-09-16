@@ -56,6 +56,7 @@ export function MultiplayerContextProvider({ children }: { children: React.React
   const [error, setError] = useState<string | null>(null);
   const [initialState, setInitialState] = useState<MultiplayerGameState | null>(null);
   const [provider, setProvider] = useState<MultiplayerProvider | null>(null);
+  const [isHost, setIsHost] = useState(false);
   const [onRemoteAction, setOnRemoteAction] = useState<((action: GameAction) => void) | null>(null);
 
   const providerRef = useRef<MultiplayerProvider | null>(null);
@@ -76,6 +77,8 @@ export function MultiplayerContextProvider({ children }: { children: React.React
   const providerCallbacks = useCallback(() => ({
     onConnectionChange: (connected: boolean) => setConnectionState(connected ? 'connected' : 'disconnected'),
     onPlayersChange: (newPlayers: Player[]) => setPlayers(newPlayers),
+    onHostChange: (host: boolean) => setIsHost(host),
+    onStateReceived: (state: MultiplayerGameState) => setInitialState(state),
     onAction: (action: GameAction) => onRemoteActionRef.current?.(action),
     onChatMessage: appendChat,
     onChatHistory: (messages: ChatMessage[]) => setChatMessages(messages.slice(-200)),
@@ -155,6 +158,7 @@ export function MultiplayerContextProvider({ children }: { children: React.React
     setRoomCode(null);
     setPlayers([]);
     setChatMessages([]);
+    setIsHost(false);
     setError(null);
     setInitialState(null);
   }, []);
@@ -189,7 +193,7 @@ export function MultiplayerContextProvider({ children }: { children: React.React
     setOnRemoteAction: handleSetOnRemoteAction,
     updateGameState,
     provider,
-    isHost: false,
+    isHost,
   };
 
   return <MultiplayerContext.Provider value={value}>{children}</MultiplayerContext.Provider>;

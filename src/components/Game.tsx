@@ -78,7 +78,6 @@ export default function Game({ onExit }: { onExit?: () => void }) {
     playerCount,
     roomCode,
     players,
-    broadcastPlace,
     leaveRoom,
   } = useMultiplayerSync();
   
