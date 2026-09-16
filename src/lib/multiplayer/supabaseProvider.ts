@@ -1,10 +1,12 @@
-// Supabase Realtime multiplayer provider with database-backed state persistence
+// Supabase Realtime shared-session provider with database-backed state + chat persistence
 
-import { createClient, RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import {
+  ChatMessage,
   GameAction,
   GameActionInput,
   Player,
+  ParticipantType,
   generatePlayerId,
   generatePlayerColor,
   generatePlayerName,
@@ -15,78 +17,82 @@ import {
   loadGameRoom,
   updateGameRoom,
   updatePlayerCount,
+  loadGameRoomMessages,
+  createGameRoomMessage,
   CitySizeLimitError,
 } from './database';
 import { msg } from 'gt-next';
+import { getSupabaseClient } from '@/lib/supabase';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-// Lazy init: only create client when Supabase is configured
-const supabase = supabaseUrl && supabaseKey 
-  ? createClient(supabaseUrl, supabaseKey) 
-  : null;
-
-// Throttle state saves to avoid excessive database writes
-const STATE_SAVE_INTERVAL = 3000; // Save state every 3 seconds max
+const STATE_SAVE_INTERVAL = 3000;
 
 export interface MultiplayerProviderOptions {
   roomCode: string;
   cityName: string;
-  playerName?: string; // Optional - auto-generated if not provided
-  initialGameState?: MultiplayerGameState; // If provided, this player is creating the room
+  playerName?: string;
+  participantType?: 'human' | 'agent';
+  userId?: string;
+  userEmail?: string;
+  initialGameState?: MultiplayerGameState;
   onConnectionChange?: (connected: boolean, peerCount: number) => void;
   onPlayersChange?: (players: Player[]) => void;
   onAction?: (action: GameAction) => void;
   onStateReceived?: (state: MultiplayerGameState) => void;
+  onChatMessage?: (message: ChatMessage) => void;
+  onChatHistory?: (messages: ChatMessage[]) => void;
   onError?: (error: string) => void;
 }
+
+export type ChatActorOverride = {
+  id: string;
+  name: string;
+  type: Extract<ParticipantType, 'human' | 'agent'>;
+};
 
 export class MultiplayerProvider {
   public readonly roomCode: string;
   public readonly peerId: string;
-  public readonly isCreator: boolean; // Whether this player created the room
+  public readonly isCreator: boolean;
 
+  private readonly supabase: SupabaseClient;
   private channel: RealtimeChannel;
   private player: Player;
   private options: MultiplayerProviderOptions;
   private players: Map<string, Player> = new Map();
   private gameState: MultiplayerGameState | null = null;
   private destroyed = false;
-  private hasReceivedInitialState = false; // Prevent multiple state-sync overwrites
-  
-  // State save throttling
+  private hasReceivedInitialState = false;
   private lastStateSave = 0;
   private pendingStateSave: MultiplayerGameState | null = null;
   private saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: MultiplayerProviderOptions) {
-    if (!supabase) {
-      throw new Error('Multiplayer requires Supabase configuration');
-    }
+    const supabase = getSupabaseClient();
+    if (!supabase) throw new Error('Shared sessions require Supabase configuration');
+
+    this.supabase = supabase;
     this.options = options;
-    this.roomCode = options.roomCode;
+    this.roomCode = options.roomCode.toUpperCase();
     this.peerId = generatePlayerId();
     this.gameState = options.initialGameState || null;
     this.isCreator = !!options.initialGameState;
 
-    // Create player info
     this.player = {
       id: this.peerId,
       name: options.playerName || generatePlayerName(),
       color: generatePlayerColor(),
       joinedAt: Date.now(),
-      isHost: false, // Legacy field, kept for compatibility
+      isHost: false,
+      kind: options.participantType || 'human',
+      userId: options.userId,
+      email: options.userEmail,
     };
 
-    // Add self to players
     this.players.set(this.peerId, this.player);
-
-    // Create Supabase Realtime channel
-    this.channel = supabase.channel(`room-${options.roomCode}`, {
+    this.channel = this.supabase.channel(`room-${this.roomCode}`, {
       config: {
         presence: { key: this.peerId },
-        broadcast: { self: false }, // Don't receive our own broadcasts
+        broadcast: { self: false },
       },
     });
   }
@@ -94,184 +100,172 @@ export class MultiplayerProvider {
   async connect(): Promise<void> {
     if (this.destroyed) return;
 
-    // If creating a room, save initial state to database
     if (this.isCreator && this.gameState) {
-      // Creator has the canonical state - mark as already received
       this.hasReceivedInitialState = true;
       try {
         const success = await createGameRoom(
           this.roomCode,
           this.options.cityName,
-          this.gameState
+          this.gameState,
+          this.options.userId ?? null,
         );
         if (!success) {
           this.options.onError?.(msg('Failed to create room in database'));
           throw new Error(msg('Failed to create room in database'));
         }
       } catch (e) {
-        if (e instanceof CitySizeLimitError) {
-          this.options.onError?.(e.message);
-          throw e;
-        }
+        if (e instanceof CitySizeLimitError) this.options.onError?.(e.message);
         throw e;
       }
     } else {
-      // Joining an existing room - load state from database
       const roomData = await loadGameRoom(this.roomCode);
       if (!roomData) {
         this.options.onError?.(msg('Room not found'));
         throw new Error(msg('Room not found'));
       }
       this.gameState = roomData.gameState;
-      // Note: We do NOT set hasReceivedInitialState here because we want to
-      // receive state-sync from existing players (which will have fresher state)
-      // Notify that we received state from the database
       this.options.onStateReceived?.(roomData.gameState);
     }
 
-    // Set up all channel listeners in a single chain
+    try {
+      const history = await loadGameRoomMessages(this.roomCode, 100);
+      this.options.onChatHistory?.(history);
+    } catch (error) {
+      console.warn('[SharedSession] Chat history unavailable:', error);
+    }
+
     this.channel
-      // Presence: track who's in the room
       .on('presence', { event: 'sync' }, () => {
         const state = this.channel.presenceState();
         this.players.clear();
         this.players.set(this.peerId, this.player);
-
         Object.entries(state).forEach(([key, presences]) => {
           if (key !== this.peerId && presences.length > 0) {
             const presence = presences[0] as unknown as { player: Player };
-            if (presence.player) {
-              this.players.set(key, presence.player);
-            }
+            if (presence.player) this.players.set(key, presence.player);
           }
         });
-
         this.notifyPlayersChange();
         this.updateConnectionStatus();
-        
-        // Update player count in database
-        updatePlayerCount(this.roomCode, this.players.size);
+        void updatePlayerCount(this.roomCode, this.players.size);
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        if (key !== this.peerId && newPresences.length > 0) {
-          const presence = newPresences[0] as unknown as { player: Player };
-          if (presence.player) {
-            this.players.set(key, presence.player);
-            this.notifyPlayersChange();
-            this.updateConnectionStatus();
-            
-            // When a new player joins, send them the current state via broadcast
-            // This ensures they get the latest state (database might be stale)
-            if (this.gameState) {
-              setTimeout(() => {
-                if (!this.destroyed && this.gameState) {
-                  this.channel.send({
-                    type: 'broadcast',
-                    event: 'state-sync',
-                    payload: { 
-                      state: this.gameState, 
-                      to: key, 
-                      from: this.peerId 
-                    },
-                  });
-                }
-              }, Math.random() * 200); // Stagger to avoid multiple simultaneous sends
+        if (key === this.peerId || newPresences.length === 0) return;
+        const presence = newPresences[0] as unknown as { player: Player };
+        if (!presence.player) return;
+        this.players.set(key, presence.player);
+        this.notifyPlayersChange();
+        this.updateConnectionStatus();
+
+        if (this.gameState) {
+          setTimeout(() => {
+            if (!this.destroyed && this.gameState) {
+              void this.channel.send({
+                type: 'broadcast',
+                event: 'state-sync',
+                payload: { state: this.gameState, to: key, from: this.peerId },
+              });
             }
-          }
+          }, Math.random() * 200);
         }
       })
       .on('presence', { event: 'leave' }, ({ key }) => {
         this.players.delete(key);
         this.notifyPlayersChange();
         this.updateConnectionStatus();
-        
-        // Update player count in database
-        updatePlayerCount(this.roomCode, this.players.size);
+        void updatePlayerCount(this.roomCode, this.players.size);
       })
-      // Broadcast: real-time game actions from other players
       .on('broadcast', { event: 'action' }, ({ payload }) => {
         const action = payload as GameAction;
-        // Guard against malformed payloads
-        if (!action || !action.type || !action.playerId) {
-          console.warn('[Multiplayer] Received invalid action payload:', payload);
-          return;
-        }
-        if (action.playerId !== this.peerId && this.options.onAction) {
-          this.options.onAction(action);
-        }
+        if (!action || !action.type || !action.playerId) return;
+        if (action.playerId !== this.peerId) this.options.onAction?.(action);
       })
-      // Broadcast: state sync from existing players (for new joiners)
+      .on('broadcast', { event: 'chat' }, ({ payload }) => {
+        const message = payload as ChatMessage;
+        if (!message?.id || !message.body) return;
+        this.options.onChatMessage?.(message);
+      })
       .on('broadcast', { event: 'state-sync' }, ({ payload }) => {
         const { state, to, from } = payload as { state: MultiplayerGameState; to: string; from: string };
-        // Only process if:
-        // 1. It's meant for us
-        // 2. We're NOT the creator (creators have the canonical state, should never be overwritten)
-        // 3. We haven't already received initial state (prevent multiple overwrites)
-        // 4. It's not from ourselves (extra safety)
-        // 5. State is valid
-        if (to === this.peerId && !this.isCreator && !this.hasReceivedInitialState && from !== this.peerId && state && this.options.onStateReceived) {
+        if (
+          to === this.peerId &&
+          !this.isCreator &&
+          !this.hasReceivedInitialState &&
+          from !== this.peerId &&
+          state &&
+          this.options.onStateReceived
+        ) {
           this.hasReceivedInitialState = true;
           this.gameState = state;
           this.options.onStateReceived(state);
         }
       });
 
-    // Subscribe and track presence
-    await this.channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await this.channel.track({ player: this.player });
-        
-        // Notify connected
-        if (this.options.onConnectionChange) {
-          this.options.onConnectionChange(true, this.players.size);
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      this.channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await this.channel.track({ player: this.player });
+          this.options.onConnectionChange?.(true, this.players.size);
+          this.notifyPlayersChange();
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        } else if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !settled) {
+          settled = true;
+          reject(new Error(`Realtime channel failed: ${status}`));
         }
-        this.notifyPlayersChange();
-      }
+      });
     });
   }
 
   dispatchAction(action: GameActionInput): void {
     if (this.destroyed) return;
-
     const fullAction: GameAction = {
       ...action,
       timestamp: Date.now(),
       playerId: this.peerId,
     };
-
-    // Broadcast to all peers
-    this.channel.send({
-      type: 'broadcast',
-      event: 'action',
-      payload: fullAction,
-    });
+    void this.channel.send({ type: 'broadcast', event: 'action', payload: fullAction });
   }
 
-  /**
-   * Update the game state and save to database (throttled)
-   */
+  async sendChat(body: string, actor?: ChatActorOverride): Promise<ChatMessage | null> {
+    if (this.destroyed) return null;
+    const text = body.trim().slice(0, 2000);
+    if (!text) return null;
+
+    const message = await createGameRoomMessage({
+      roomCode: this.roomCode,
+      senderId: actor?.id || this.player.id,
+      senderName: actor?.name || this.player.name,
+      senderType: actor?.type || this.player.kind,
+      body: text,
+    });
+    if (!message) return null;
+
+    this.options.onChatMessage?.(message);
+    await this.channel.send({ type: 'broadcast', event: 'chat', payload: message });
+    return message;
+  }
+
   updateGameState(state: MultiplayerGameState): void {
     this.gameState = state;
-    
     const now = Date.now();
-    const timeSinceLastSave = now - this.lastStateSave;
-    
-    if (timeSinceLastSave >= STATE_SAVE_INTERVAL) {
-      // Save immediately
+    const elapsed = now - this.lastStateSave;
+    if (elapsed >= STATE_SAVE_INTERVAL) {
       this.saveStateToDatabase(state);
-    } else {
-      // Queue the save for later
-      this.pendingStateSave = state;
-      
-      if (!this.saveTimeout) {
-        this.saveTimeout = setTimeout(() => {
-          this.saveTimeout = null;
-          if (this.pendingStateSave && !this.destroyed) {
-            this.saveStateToDatabase(this.pendingStateSave);
-            this.pendingStateSave = null;
-          }
-        }, STATE_SAVE_INTERVAL - timeSinceLastSave);
-      }
+      return;
+    }
+    this.pendingStateSave = state;
+    if (!this.saveTimeout) {
+      this.saveTimeout = setTimeout(() => {
+        this.saveTimeout = null;
+        if (this.pendingStateSave && !this.destroyed) {
+          this.saveStateToDatabase(this.pendingStateSave);
+          this.pendingStateSave = null;
+        }
+      }, STATE_SAVE_INTERVAL - elapsed);
     }
   }
 
@@ -279,51 +273,39 @@ export class MultiplayerProvider {
     this.lastStateSave = Date.now();
     updateGameRoom(this.roomCode, state).catch((e) => {
       if (e instanceof CitySizeLimitError) {
-        console.warn('[Multiplayer] City too large to save:', e.message);
+        console.warn('[SharedSession] City too large to save:', e.message);
         this.options.onError?.(e.message);
       } else {
-        console.error('[Multiplayer] Failed to save state to database:', e);
+        console.error('[SharedSession] Failed to save state:', e);
       }
     });
   }
 
   private updateConnectionStatus(): void {
-    if (this.options.onConnectionChange) {
-      this.options.onConnectionChange(true, this.players.size);
-    }
+    this.options.onConnectionChange?.(true, this.players.size);
   }
 
   private notifyPlayersChange(): void {
-    if (this.options.onPlayersChange) {
-      this.options.onPlayersChange(Array.from(this.players.values()));
-    }
+    this.options.onPlayersChange?.(Array.from(this.players.values()));
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    
-    // Save any pending state before disconnecting
     if (this.pendingStateSave) {
       this.saveStateToDatabase(this.pendingStateSave);
       this.pendingStateSave = null;
     }
-    
-    // Clear save timeout
     if (this.saveTimeout) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = null;
     }
-    
-    this.channel.unsubscribe();
-    supabase?.removeChannel(this.channel);
+    void this.channel.unsubscribe();
+    void this.supabase.removeChannel(this.channel);
   }
 }
 
-// Create and connect a multiplayer provider
-export async function createMultiplayerProvider(
-  options: MultiplayerProviderOptions
-): Promise<MultiplayerProvider> {
+export async function createMultiplayerProvider(options: MultiplayerProviderOptions): Promise<MultiplayerProvider> {
   const provider = new MultiplayerProvider(options);
   await provider.connect();
   return provider;

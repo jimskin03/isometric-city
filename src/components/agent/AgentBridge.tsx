@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
+import { useMultiplayerOptional } from '@/context/MultiplayerContext';
 import type { AgentCommandEnvelope } from '@/lib/agent/protocol';
 import { createAgentSnapshot, createFounderPlan, isBlankCity } from '@/lib/agent/protocol';
 
@@ -25,6 +26,12 @@ export function AgentBridge() {
     addNotification,
   } = useGame();
   const founderStartedRef = useRef(false);
+  const multiplayer = useMultiplayerOptional();
+  const multiplayerRef = useRef(multiplayer);
+
+  useEffect(() => {
+    multiplayerRef.current = multiplayer;
+  }, [multiplayer]);
 
   useEffect(() => {
     if (!isStateReady) return;
@@ -35,7 +42,21 @@ export function AgentBridge() {
     const publish = async () => {
       if (stopped) return;
       try {
-        const snapshot = createAgentSnapshot(latestStateRef.current, sessionId);
+        const mp = multiplayerRef.current;
+        const snapshot = createAgentSnapshot(latestStateRef.current, sessionId, {
+          roomCode: mp?.roomCode ?? null,
+          participants: (mp?.players ?? []).map((player) => ({
+            id: player.id,
+            name: player.name,
+            kind: player.kind || 'human',
+          })),
+          recentMessages: (mp?.chatMessages ?? []).slice(-20).map((message) => ({
+            senderName: message.senderName,
+            senderType: message.senderType,
+            body: message.body,
+            createdAt: message.createdAt,
+          })),
+        });
         await fetch('/api/agent/state', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -80,6 +101,17 @@ export function AgentBridge() {
         case 'bootstrap_city':
           executeFounder();
           break;
+        case 'chat': {
+          const mp = multiplayerRef.current;
+          if (mp?.connectionState === 'connected') {
+            void mp.sendChat(command.message, {
+              id: envelope.actor?.id || `agent-${envelope.id}`,
+              name: envelope.actor?.name || 'Paradise Agent',
+              type: 'agent',
+            });
+          }
+          break;
+        }
       }
     };
 

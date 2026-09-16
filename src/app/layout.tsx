@@ -5,6 +5,7 @@ import './globals.css';
 import { getLocale } from "gt-next/server";
 import { GTProvider } from "gt-next";
 import { PARADISE_CITY } from '@/config/paradise';
+import { AuthProvider } from '@/context/AuthContext';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -84,7 +85,7 @@ export default async function RootLayout({ children }: {children: React.ReactNod
         type="image/webp" />
 
       </head>
-      <body className="bg-background text-foreground antialiased font-sans overflow-hidden"><GTProvider>{children}<Analytics /></GTProvider></body>
+      <body className="bg-background text-foreground antialiased font-sans overflow-hidden"><GTProvider><AuthProvider>{children}</AuthProvider><Analytics /></GTProvider></body>
     </html>
   );
 }

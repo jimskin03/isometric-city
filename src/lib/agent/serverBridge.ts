@@ -1,4 +1,4 @@
-import type { AgentCitySnapshot, AgentCommand, AgentCommandEnvelope } from './protocol';
+import type { AgentActor, AgentCitySnapshot, AgentCommand, AgentCommandEnvelope } from './protocol';
 
 type SessionState = {
   snapshot: AgentCitySnapshot;
@@ -12,7 +12,6 @@ type AgentBridgeStore = {
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var __paradiseAgentBridge: AgentBridgeStore | undefined;
 }
 
@@ -40,7 +39,7 @@ export function getAgentSnapshot(sessionId?: string | null): SessionState | null
   return s.sessions.get(id) ?? null;
 }
 
-export function queueAgentCommand(command: AgentCommand, sessionId?: string | null): AgentCommandEnvelope {
+export function queueAgentCommand(command: AgentCommand, sessionId?: string | null, actor?: AgentActor): AgentCommandEnvelope {
   const s = store();
   const target = sessionId || s.latestSessionId;
   if (!target) throw new Error('No active Paradise City game session is connected.');
@@ -49,6 +48,7 @@ export function queueAgentCommand(command: AgentCommand, sessionId?: string | nu
     id: crypto.randomUUID(),
     sessionId: target,
     command,
+    actor,
     createdAt: Date.now(),
   };
   const queue = s.queues.get(target) ?? [];

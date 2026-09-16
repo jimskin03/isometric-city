@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 
 const argv = process.argv.slice(2);
-const urlIndex = argv.indexOf('--url');
-const baseUrl = (urlIndex >= 0 ? argv[urlIndex + 1] : process.env.PARADISE_CITY_URL || 'http://localhost:3000').replace(/\/$/, '');
-if (urlIndex >= 0) argv.splice(urlIndex, 2);
 
+function takeFlag(name) {
+  const index = argv.indexOf(name);
+  if (index < 0) return undefined;
+  const value = argv[index + 1];
+  argv.splice(index, value === undefined ? 1 : 2);
+  return value;
+}
+
+const baseUrl = (takeFlag('--url') || process.env.PARADISE_CITY_URL || 'http://localhost:3000').replace(/\/$/, '');
+const explicitSessionId = takeFlag('--session');
+const agentName = takeFlag('--agent') || process.env.PARADISE_AGENT_NAME || 'Paradise Agent';
+const agentId = takeFlag('--agent-id') || process.env.PARADISE_AGENT_ID || `agent-${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'planner'}`;
 const token = process.env.PARADISE_AGENT_TOKEN;
+const actor = { id: agentId, name: agentName };
 const [action, ...args] = argv;
 
 function headers(withJson = false) {
@@ -26,11 +36,12 @@ async function request(path, options = {}) {
   return payload;
 }
 
-async function queue(command, sessionId) {
+async function queue(command, positionalSessionId) {
+  const sessionId = explicitSessionId || positionalSessionId;
   return request('/api/agent/commands', {
     method: 'POST',
     headers: headers(true),
-    body: JSON.stringify({ sessionId, command }),
+    body: JSON.stringify({ sessionId, command, actor }),
   });
 }
 
@@ -38,24 +49,33 @@ function usage() {
   console.log(`Paradise City agent CLI
 
 Usage:
-  npm run agent -- state [sessionId] [--url URL]
+  npm run agent -- state [sessionId] [--session ID] [--url URL]
   npm run agent -- instructions [--url URL]
-  npm run agent -- bootstrap [sessionId] [--url URL]
-  npm run agent -- place <tool> <x> <y> [sessionId] [--url URL]
-  npm run agent -- speed <0|1|2|3> [sessionId] [--url URL]
-  npm run agent -- tax <0-100> [sessionId] [--url URL]
+  npm run agent -- bootstrap [sessionId] [--agent NAME] [--session ID]
+  npm run agent -- place <tool> <x> <y> [sessionId] [--agent NAME]
+  npm run agent -- speed <0|1|2|3> [sessionId] [--agent NAME]
+  npm run agent -- tax <0-100> [sessionId] [--agent NAME]
+  npm run agent -- chat <message> [sessionId] [--agent NAME]
+
+Global flags:
+  --url URL             Paradise City server URL
+  --session ID          Browser/agent bridge session ID
+  --agent NAME          Agent display name, e.g. A.Ira
+  --agent-id ID         Stable machine identity for the agent
 
 Environment:
-  PARADISE_CITY_URL       Default server URL
-  PARADISE_AGENT_TOKEN    Optional write token matching the Render environment
+  PARADISE_CITY_URL
+  PARADISE_AGENT_TOKEN
+  PARADISE_AGENT_NAME
+  PARADISE_AGENT_ID
 
-Agents should read instructions, inspect state, act, then inspect state again.`);
+For shared sessions, state.sharedSession contains the room code, participants and recent human/agent chat. Agents should inspect state, coordinate through chat when useful, execute legal actions, then inspect state again.`);
 }
 
 let result;
 switch (action) {
   case 'state': {
-    const sessionId = args[0];
+    const sessionId = explicitSessionId || args[0];
     result = await request(`/api/agent/state${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`, { headers: headers() });
     break;
   }
@@ -66,14 +86,14 @@ switch (action) {
     result = await queue({ type: 'bootstrap_city' }, args[0]);
     break;
   case 'place': {
-    const [tool, xRaw, yRaw, sessionId] = args;
+    const [tool, xRaw, yRaw, positionalSessionId] = args;
     const x = Number(xRaw);
     const y = Number(yRaw);
     if (!tool || !Number.isInteger(x) || !Number.isInteger(y)) {
       usage();
       process.exit(1);
     }
-    result = await queue({ type: 'place', tool, x, y }, sessionId);
+    result = await queue({ type: 'place', tool, x, y }, positionalSessionId);
     break;
   }
   case 'speed': {
@@ -92,6 +112,21 @@ switch (action) {
       process.exit(1);
     }
     result = await queue({ type: 'set_tax', rate }, args[1]);
+    break;
+  }
+  case 'chat': {
+    if (args.length === 0) {
+      usage();
+      process.exit(1);
+    }
+    let positionalSessionId;
+    let messageArgs = args;
+    if (!explicitSessionId && args.length > 1 && /^[0-9a-f-]{16,}$/i.test(args.at(-1))) {
+      positionalSessionId = args.at(-1);
+      messageArgs = args.slice(0, -1);
+    }
+    const message = messageArgs.join(' ').trim();
+    result = await queue({ type: 'chat', message }, positionalSessionId);
     break;
   }
   default:

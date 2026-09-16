@@ -19,6 +19,7 @@ import { useMultiplayerSync } from '@/hooks/useMultiplayerSync';
 import { useCopyRoomLink } from '@/hooks/useCopyRoomLink';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
 import { ShareModal } from '@/components/multiplayer/ShareModal';
+import { SessionChat } from '@/components/multiplayer/SessionChat';
 import { Copy, Check } from 'lucide-react';
 
 // Import game components
@@ -271,7 +272,9 @@ export default function Game({ onExit }: { onExit?: () => void }) {
               onBargeDelivery={handleBargeDelivery}
             />
             
-            {/* Multiplayer Players Indicator - Mobile */}
+            <SessionChat className="absolute bottom-2 right-2 z-30" />
+
+            {/* Shared Session Participants - Mobile */}
             {isMultiplayer && (
               <div className="absolute top-2 right-2 z-20">
                 <div className="bg-slate-900/90 border border-slate-700 rounded-lg px-2 py-1.5 shadow-lg">
@@ -297,8 +300,8 @@ export default function Game({ onExit }: { onExit?: () => void }) {
                     <div className="mt-1 space-y-0.5">
                       {players.map((player) => (
                         <div key={player.id} className="flex items-center gap-1 text-[10px] text-slate-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                          {player.name}
+                          <span className={`w-1.5 h-1.5 rounded-full ${player.kind === 'agent' ? 'bg-cyan-400' : 'bg-green-500'}`} />
+                          <span className={player.kind === 'agent' ? 'text-cyan-300' : ''}>{player.name}</span>
                         </div>
                       ))}
                     </div>
@@ -358,7 +361,9 @@ export default function Game({ onExit }: { onExit?: () => void }) {
             <OverlayModeToggle overlayMode={overlayMode} setOverlayMode={setOverlayMode} />
             <MiniMap onNavigate={(x, y) => setNavigationTarget({ x, y })} viewport={viewport} />
             
-            {/* Multiplayer Players Indicator */}
+            <SessionChat className="absolute bottom-4 right-48 z-30" />
+
+            {/* Shared Session Participants */}
             {isMultiplayer && (
               <div className="absolute top-4 right-4 z-20">
                 <div className="bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 shadow-lg min-w-[120px]">
@@ -384,8 +389,8 @@ export default function Game({ onExit }: { onExit?: () => void }) {
                     <div className="mt-1.5 space-y-0.5">
                       {players.map((player) => (
                         <div key={player.id} className="flex items-center gap-1.5 text-xs text-slate-400">
-                          <span className="w-2 h-2 rounded-full bg-green-500" />
-                          {player.name}
+                          <span className={`w-2 h-2 rounded-full ${player.kind === 'agent' ? 'bg-cyan-400' : 'bg-green-500'}`} />
+                          <span className={player.kind === 'agent' ? 'text-cyan-300' : ''}>{player.name}</span>
                         </div>
                       ))}
                     </div>

@@ -1,18 +1,13 @@
 'use client';
 
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   MultiplayerProvider,
   createMultiplayerProvider,
+  type ChatActorOverride,
 } from '@/lib/multiplayer/supabaseProvider';
 import {
+  ChatMessage,
   GameAction,
   GameActionInput,
   Player,
@@ -21,60 +16,43 @@ import {
   MultiplayerGameState,
 } from '@/lib/multiplayer/types';
 import { useGT } from 'gt-next';
+import { useAuth } from '@/context/AuthContext';
 
-// Generate a random 5-character room code
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 5; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
+  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
 
 interface MultiplayerContextValue {
-  // Connection state
   connectionState: ConnectionState;
   roomCode: string | null;
   players: Player[];
+  chatMessages: ChatMessage[];
   error: string | null;
-
-  // Actions
   createRoom: (cityName: string, initialState: MultiplayerGameState) => Promise<string>;
   joinRoom: (roomCode: string) => Promise<RoomData>;
   leaveRoom: () => void;
-  
-  // Game action dispatch
   dispatchAction: (action: GameActionInput) => void;
-  
-  // Initial state for new players
+  sendChat: (body: string, actor?: ChatActorOverride) => Promise<ChatMessage | null>;
   initialState: MultiplayerGameState | null;
-  
-  // Callback for when remote actions are received
   onRemoteAction: ((action: GameAction) => void) | null;
   setOnRemoteAction: (callback: ((action: GameAction) => void) | null) => void;
-  
-  // Update the game state (any player can do this now)
   updateGameState: (state: MultiplayerGameState) => void;
-  
-  // Provider instance (for advanced usage)
   provider: MultiplayerProvider | null;
-  
-  // Legacy compatibility - always false now since there's no host
   isHost: boolean;
 }
 
 const MultiplayerContext = createContext<MultiplayerContextValue | null>(null);
 
-export function MultiplayerContextProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function MultiplayerContextProvider({ children }: { children: React.ReactNode }) {
   const gt = useGT();
+  const { user, displayName } = useAuth();
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [initialState, setInitialState] = useState<MultiplayerGameState | null>(null);
   const [provider, setProvider] = useState<MultiplayerProvider | null>(null);
@@ -83,199 +61,146 @@ export function MultiplayerContextProvider({
   const providerRef = useRef<MultiplayerProvider | null>(null);
   const onRemoteActionRef = useRef<((action: GameAction) => void) | null>(null);
 
-  // Set up remote action callback
-  const handleSetOnRemoteAction = useCallback(
-    (callback: ((action: GameAction) => void) | null) => {
-      onRemoteActionRef.current = callback;
-      setOnRemoteAction(callback);
+  const appendChat = useCallback((message: ChatMessage) => {
+    setChatMessages((current) => {
+      if (current.some((item) => item.id === message.id)) return current;
+      return [...current, message].sort((a, b) => a.createdAt - b.createdAt).slice(-200);
+    });
+  }, []);
+
+  const handleSetOnRemoteAction = useCallback((callback: ((action: GameAction) => void) | null) => {
+    onRemoteActionRef.current = callback;
+    setOnRemoteAction(callback);
+  }, []);
+
+  const providerCallbacks = useCallback(() => ({
+    onConnectionChange: (connected: boolean) => setConnectionState(connected ? 'connected' : 'disconnected'),
+    onPlayersChange: (newPlayers: Player[]) => setPlayers(newPlayers),
+    onAction: (action: GameAction) => onRemoteActionRef.current?.(action),
+    onChatMessage: appendChat,
+    onChatHistory: (messages: ChatMessage[]) => setChatMessages(messages.slice(-200)),
+    onError: (message: string) => {
+      setError(message);
+      setConnectionState('error');
     },
-    []
-  );
+  }), [appendChat]);
 
-  // Create a room (first player to start a session)
-  const createRoom = useCallback(
-    async (cityName: string, gameState: MultiplayerGameState): Promise<string> => {
-      setConnectionState('connecting');
-      setError(null);
-
-      try {
-        // Generate room code
-        const newRoomCode = generateRoomCode();
-
-        // Create multiplayer provider with initial state
-        // State will be saved to Supabase database
-        const provider = await createMultiplayerProvider({
-          roomCode: newRoomCode,
-          cityName,
-          initialGameState: gameState,
-          onConnectionChange: (connected) => {
-            setConnectionState(connected ? 'connected' : 'disconnected');
-          },
-          onPlayersChange: (newPlayers) => {
-            setPlayers(newPlayers);
-          },
-          onAction: (action) => {
-            if (onRemoteActionRef.current) {
-              onRemoteActionRef.current(action);
-            }
-          },
-          onError: (errorMsg) => {
-            setError(errorMsg);
-            setConnectionState('error');
-          },
-        });
-
-        providerRef.current = provider;
-        setProvider(provider);
-        setRoomCode(newRoomCode);
-        setConnectionState('connected');
-
-        return newRoomCode;
-      } catch (err) {
-        setConnectionState('error');
-        setError(err instanceof Error ? err.message : gt('Failed to create room'));
-        throw err;
-      }
-    },
-    [gt]
-  );
-
-  // Join an existing room
-  const joinRoom = useCallback(
-    async (code: string): Promise<RoomData> => {
-      setConnectionState('connecting');
-      setError(null);
-
-      try {
-        const normalizedCode = code.toUpperCase();
-
-        // Create multiplayer provider - state will be loaded from Supabase database
-        const provider = await createMultiplayerProvider({
-          roomCode: normalizedCode,
-          cityName: gt('Co-op City'),
-          // No initialGameState - we'll load from database
-          onConnectionChange: (connected) => {
-            setConnectionState(connected ? 'connected' : 'disconnected');
-          },
-          onPlayersChange: (newPlayers) => {
-            setPlayers(newPlayers);
-          },
-          onAction: (action) => {
-            if (onRemoteActionRef.current) {
-              onRemoteActionRef.current(action);
-            }
-          },
-          onStateReceived: (state) => {
-            // State loaded from database
-            setInitialState(state);
-          },
-          onError: (errorMsg) => {
-            setError(errorMsg);
-            setConnectionState('error');
-          },
-        });
-
-        providerRef.current = provider;
-        setProvider(provider);
-        setRoomCode(normalizedCode);
-        setConnectionState('connected');
-
-        // Return room data
-        const room: RoomData = {
-          code: normalizedCode,
-          hostId: '',
-          cityName: gt('Co-op City'),
-          createdAt: Date.now(),
-          playerCount: 1,
-        };
-
-        return room;
-      } catch (err) {
-        setConnectionState('error');
-        setError(err instanceof Error ? err.message : gt('Failed to join room'));
-        throw err;
-      }
-    },
-    [gt]
-  );
-
-  // Leave the current room
-  const leaveRoom = useCallback(() => {
-    if (providerRef.current) {
-      providerRef.current.destroy();
-      providerRef.current = null;
+  const createRoom = useCallback(async (cityName: string, gameState: MultiplayerGameState): Promise<string> => {
+    setConnectionState('connecting');
+    setError(null);
+    setChatMessages([]);
+    try {
+      const newRoomCode = generateRoomCode();
+      const nextProvider = await createMultiplayerProvider({
+        roomCode: newRoomCode,
+        cityName,
+        initialGameState: gameState,
+        playerName: displayName || undefined,
+        participantType: 'human',
+        userId: user?.id,
+        userEmail: user?.email,
+        ...providerCallbacks(),
+      });
+      providerRef.current = nextProvider;
+      setProvider(nextProvider);
+      setRoomCode(newRoomCode);
+      setConnectionState('connected');
+      return newRoomCode;
+    } catch (err) {
+      setConnectionState('error');
+      setError(err instanceof Error ? err.message : gt('Failed to create room'));
+      throw err;
     }
+  }, [displayName, gt, providerCallbacks, user]);
 
+  const joinRoom = useCallback(async (code: string): Promise<RoomData> => {
+    setConnectionState('connecting');
+    setError(null);
+    setChatMessages([]);
+    try {
+      const normalizedCode = code.toUpperCase();
+      const nextProvider = await createMultiplayerProvider({
+        roomCode: normalizedCode,
+        cityName: gt('Shared City'),
+        playerName: displayName || undefined,
+        participantType: 'human',
+        userId: user?.id,
+        userEmail: user?.email,
+        ...providerCallbacks(),
+        onStateReceived: (state) => setInitialState(state),
+      });
+      providerRef.current = nextProvider;
+      setProvider(nextProvider);
+      setRoomCode(normalizedCode);
+      setConnectionState('connected');
+      return {
+        code: normalizedCode,
+        hostId: '',
+        cityName: gt('Shared City'),
+        createdAt: Date.now(),
+        playerCount: 1,
+      };
+    } catch (err) {
+      setConnectionState('error');
+      setError(err instanceof Error ? err.message : gt('Failed to join room'));
+      throw err;
+    }
+  }, [displayName, gt, providerCallbacks, user]);
+
+  const leaveRoom = useCallback(() => {
+    providerRef.current?.destroy();
+    providerRef.current = null;
     setProvider(null);
     setConnectionState('disconnected');
     setRoomCode(null);
     setPlayers([]);
+    setChatMessages([]);
     setError(null);
     setInitialState(null);
   }, []);
 
-  // Dispatch a game action to all peers
-  const dispatchAction = useCallback(
-    (action: GameActionInput) => {
-      if (providerRef.current) {
-        providerRef.current.dispatchAction(action);
-      }
-    },
-    []
-  );
-
-  // Update the game state (any player can do this)
-  const updateGameState = useCallback(
-    (state: MultiplayerGameState) => {
-      if (providerRef.current) {
-        providerRef.current.updateGameState(state);
-      }
-    },
-    []
-  );
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (providerRef.current) {
-        providerRef.current.destroy();
-      }
-    };
+  const dispatchAction = useCallback((action: GameActionInput) => {
+    providerRef.current?.dispatchAction(action);
   }, []);
+
+  const sendChat = useCallback(async (body: string, actor?: ChatActorOverride) => {
+    return providerRef.current?.sendChat(body, actor) ?? null;
+  }, []);
+
+  const updateGameState = useCallback((state: MultiplayerGameState) => {
+    providerRef.current?.updateGameState(state);
+  }, []);
+
+  useEffect(() => () => providerRef.current?.destroy(), []);
 
   const value: MultiplayerContextValue = {
     connectionState,
     roomCode,
     players,
+    chatMessages,
     error,
     createRoom,
     joinRoom,
     leaveRoom,
     dispatchAction,
+    sendChat,
     initialState,
     onRemoteAction,
     setOnRemoteAction: handleSetOnRemoteAction,
     updateGameState,
     provider,
-    isHost: false, // No longer meaningful - kept for compatibility
+    isHost: false,
   };
 
-  return (
-    <MultiplayerContext.Provider value={value}>
-      {children}
-    </MultiplayerContext.Provider>
-  );
+  return <MultiplayerContext.Provider value={value}>{children}</MultiplayerContext.Provider>;
 }
 
 export function useMultiplayer() {
   const context = useContext(MultiplayerContext);
-  if (!context) {
-    throw new Error('useMultiplayer must be used within a MultiplayerContextProvider');
-  }
+  if (!context) throw new Error('useMultiplayer must be used within a MultiplayerContextProvider');
   return context;
 }
 
-// Optional hook that returns null if not in multiplayer context
 export function useMultiplayerOptional() {
   return useContext(MultiplayerContext);
 }

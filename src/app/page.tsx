@@ -14,6 +14,7 @@ import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { T } from 'gt-next';
 import { X } from 'lucide-react';
 import { PARADISE_CITY } from '@/config/paradise';
+import { CryptGregAuthWidget } from '@/components/auth/CryptGregAuthWidget';
 
 const STORAGE_KEY = PARADISE_CITY.storage.gameState;
 const SAVED_CITIES_INDEX_KEY = PARADISE_CITY.storage.savedCitiesIndex;
@@ -485,6 +486,7 @@ export default function HomePage() {
           
           {/* Buttons - more compact */}
           <div className="flex flex-col gap-2 sm:gap-3 w-full max-w-xs flex-shrink-0">
+            <CryptGregAuthWidget />
             <Button 
               onClick={() => setShowGame(true)}
               className="w-full py-4 sm:py-6 text-lg sm:text-xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
@@ -497,7 +499,7 @@ export default function HomePage() {
               variant="outline"
               className="w-full py-4 sm:py-6 text-lg sm:text-xl font-light tracking-wide bg-white/5 hover:bg-white/15 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
             >
-              <T>Co-op</T>
+              <T>Shared Session</T>
             </Button>
 
             <Button
@@ -584,6 +586,7 @@ export default function HomePage() {
               {PARADISE_CITY.name}
             </h1>
             <div className="flex flex-col gap-3">
+              <CryptGregAuthWidget />
               <Button 
                 onClick={() => setShowGame(true)}
                 className="w-64 py-8 text-2xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
@@ -595,7 +598,7 @@ export default function HomePage() {
                 variant="outline"
                 className="w-64 py-8 text-2xl font-light tracking-wide bg-white/5 hover:bg-white/15 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
               >
-                <T>Co-op</T>
+                <T>Shared Session</T>
               </Button>
               <Button
                 onClick={async () => {

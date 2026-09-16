@@ -17,9 +17,11 @@ Operating rules:
 8. Do not bulldoze functioning districts unless there is a clear planning reason.
 9. The ASCII map is semantic world state, not decoration. Use its coordinates to plan construction.
 10. You are a city operator, not a narrator. Execute useful actions and verify their effects.
+11. If state.sharedSession.roomCode is present, you are operating inside a shared human/agent session. Read recentMessages before major actions and use chat when coordination would avoid conflicting work.
+12. Identify yourself with a stable agent name/id when using the CLI so humans and other agents can distinguish your messages.
 
 Map coordinates are zero-based: x increases left-to-right, y increases top-to-bottom.
-Available command types: place, batch_place, set_speed, set_tax, bootstrap_city.`;
+Available command types: place, batch_place, set_speed, set_tax, bootstrap_city, chat.`;
 
 export async function GET() {
   return NextResponse.json({

@@ -32,18 +32,10 @@
 //   FOR EACH ROW
 //   EXECUTE FUNCTION update_updated_at();
 
-import { createClient } from '@supabase/supabase-js';
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
-import { MultiplayerGameState } from './types';
+import { ChatMessage, MultiplayerGameState } from './types';
+import { getSupabaseClient } from '@/lib/supabase';
 import { serializeAndCompressForDBAsync } from '@/lib/saveWorkerManager';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-// Lazy init: only create client when Supabase is configured
-const supabase = supabaseUrl && supabaseKey 
-  ? createClient(supabaseUrl, supabaseKey) 
-  : null;
 
 // Maximum city size limit for Supabase storage (20MB)
 const MAX_CITY_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
@@ -91,8 +83,10 @@ export interface GameRoomRow {
 export async function createGameRoom(
   roomCode: string,
   cityName: string,
-  gameState: MultiplayerGameState
+  gameState: MultiplayerGameState,
+  createdBy?: string | null
 ): Promise<boolean> {
+  const supabase = getSupabaseClient();
   if (!supabase) return false;
   try {
     // PERF: Both JSON.stringify and lz-string compression happen in the worker
@@ -108,6 +102,7 @@ export async function createGameRoom(
         city_name: cityName,
         game_state: compressed,
         player_count: 1,
+        created_by: createdBy || null,
       });
 
     if (error) {
@@ -132,6 +127,7 @@ export async function createGameRoom(
 export async function loadGameRoom(
   roomCode: string
 ): Promise<{ gameState: MultiplayerGameState; cityName: string } | null> {
+  const supabase = getSupabaseClient();
   if (!supabase) return null;
   try {
     const { data, error } = await supabase
@@ -168,6 +164,7 @@ export async function updateGameRoom(
   roomCode: string,
   gameState: MultiplayerGameState
 ): Promise<boolean> {
+  const supabase = getSupabaseClient();
   if (!supabase) return false;
   try {
     // PERF: Both JSON.stringify and lz-string compression happen in the worker
@@ -201,6 +198,7 @@ export async function updateGameRoom(
  * Check if a room exists
  */
 export async function roomExists(roomCode: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
   if (!supabase) return false;
   try {
     const { data, error } = await supabase
@@ -222,6 +220,7 @@ export async function updatePlayerCount(
   roomCode: string,
   count: number
 ): Promise<void> {
+  const supabase = getSupabaseClient();
   if (!supabase) return;
   try {
     await supabase
@@ -233,3 +232,59 @@ export async function updatePlayerCount(
   }
 }
 
+
+
+export async function loadGameRoomMessages(roomCode: string, limit = 100): Promise<ChatMessage[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('game_room_messages')
+    .select('id, room_code, sender_id, sender_name, sender_type, body, created_at')
+    .eq('room_code', roomCode.toUpperCase())
+    .order('created_at', { ascending: true })
+    .limit(Math.max(1, Math.min(limit, 200)));
+  if (error || !data) {
+    console.error('[Database] Failed to load room messages:', error);
+    return [];
+  }
+  return data.map((row) => ({
+    id: String(row.id),
+    roomCode: row.room_code,
+    senderId: row.sender_id,
+    senderName: row.sender_name,
+    senderType: row.sender_type,
+    body: row.body,
+    createdAt: new Date(row.created_at).getTime(),
+  })) as ChatMessage[];
+}
+
+export async function createGameRoomMessage(input: Omit<ChatMessage, 'id' | 'createdAt'>): Promise<ChatMessage | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  const body = input.body.trim().slice(0, 2000);
+  if (!body) return null;
+  const { data, error } = await supabase
+    .from('game_room_messages')
+    .insert({
+      room_code: input.roomCode.toUpperCase(),
+      sender_id: input.senderId,
+      sender_name: input.senderName,
+      sender_type: input.senderType,
+      body,
+    })
+    .select('id, room_code, sender_id, sender_name, sender_type, body, created_at')
+    .single();
+  if (error || !data) {
+    console.error('[Database] Failed to save room message:', error);
+    return null;
+  }
+  return {
+    id: String(data.id),
+    roomCode: data.room_code,
+    senderId: data.sender_id,
+    senderName: data.sender_name,
+    senderType: data.sender_type,
+    body: data.body,
+    createdAt: new Date(data.created_at).getTime(),
+  } as ChatMessage;
+}

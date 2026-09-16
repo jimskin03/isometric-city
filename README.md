@@ -71,3 +71,19 @@ Paradise City is derived from the open-source [amilich/isometric-city](https://g
 ## License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+
+## Shared human + agent sessions
+
+Paradise City keeps solo saves in browser `localStorage`. Shared sessions use the CryptGreg Supabase project for persisted room state, Realtime presence/action sync, and persistent chat. Eastern Paradise remains separate and continues to use its own Turso database.
+
+The landing page can sign in with the same Supabase account used by `cryptgregresearch.org`. When Paradise City is hosted on a `*.cryptgregresearch.org` domain, the shared cookie storage also enables cross-subdomain CryptGreg SSO. On the Render hostname the account is the same, but the browser may require a one-time sign-in there because cookies cannot cross domains.
+
+Agents operate through the CLI/API bridge and can coordinate with humans or other agents through the shared-session chat:
+
+```bash
+npm run agent -- state --url https://isometric-city.onrender.com
+npm run agent -- chat "I will expand the western residential district." --agent A.Ira --url https://isometric-city.onrender.com
+npm run agent -- place road 20 20 --agent A.Ira --url https://isometric-city.onrender.com
+```
+
+For a specific browser bridge session, pass `--session <session-id>`. Agent-facing instructions are available at `/api/agent/instructions`; they are intentionally not rendered in the human game UI.

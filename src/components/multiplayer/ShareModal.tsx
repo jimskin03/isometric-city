@@ -67,7 +67,7 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
       <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-white">
-            Invite Players
+            Invite Participants
           </DialogTitle>
           <DialogDescription className="text-slate-400">
             Share this link with friends to play together
@@ -78,7 +78,7 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
           {isCreating || !roomCode ? (
             <div className="flex items-center justify-center gap-2 py-8">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              <span className="text-slate-400">Creating co-op session...</span>
+              <span className="text-slate-400">Creating shared session...</span>
             </div>
           ) : (
             <>

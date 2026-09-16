@@ -1,5 +1,10 @@
 import type { GameState, Tool } from '@/types/game';
 
+export type AgentActor = {
+  id: string;
+  name: string;
+};
+
 export type AgentPlaceAction = {
   tool: Tool;
   x: number;
@@ -11,12 +16,14 @@ export type AgentCommand =
   | { type: 'batch_place'; actions: AgentPlaceAction[] }
   | { type: 'set_speed'; speed: 0 | 1 | 2 | 3 }
   | { type: 'set_tax'; rate: number }
-  | { type: 'bootstrap_city' };
+  | { type: 'bootstrap_city' }
+  | { type: 'chat'; message: string };
 
 export type AgentCommandEnvelope = {
   id: string;
   sessionId: string;
   command: AgentCommand;
+  actor?: AgentActor;
   createdAt: number;
 };
 
@@ -35,6 +42,11 @@ export type AgentCitySnapshot = {
   map: {
     legend: Record<string, string>;
     rows: string[];
+  };
+  sharedSession?: {
+    roomCode: string | null;
+    participants: Array<{ id: string; name: string; kind: string }>;
+    recentMessages: Array<{ senderName: string; senderType: string; body: string; createdAt: number }>;
   };
   buildings: Array<{
     x: number;
@@ -60,7 +72,11 @@ function tileSymbol(state: GameState, x: number, y: number): string {
   return '.';
 }
 
-export function createAgentSnapshot(state: GameState, sessionId: string): AgentCitySnapshot {
+export function createAgentSnapshot(
+  state: GameState,
+  sessionId: string,
+  sharedSession?: AgentCitySnapshot['sharedSession'],
+): AgentCitySnapshot {
   const buildings: AgentCitySnapshot['buildings'] = [];
   const rows = state.grid.map((row, y) =>
     row.map((tile, x) => {
@@ -90,6 +106,7 @@ export function createAgentSnapshot(state: GameState, sessionId: string): AgentC
       taxRate: state.taxRate,
     },
     stats: state.stats,
+    sharedSession,
     map: {
       legend: {
         '.': 'open land',

@@ -229,7 +229,7 @@ export function MobileTopBar({
                 <button
                   onClick={onShare}
                   className="h-6 w-4 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                  title="Invite Players"
+                  title="Invite Participants"
                 >
                   <Users className="w-3 h-3" />
                 </button>

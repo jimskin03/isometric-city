@@ -37,7 +37,7 @@ export function CoopModal({
 }: CoopModalProps) {
   const gt = useGT();
   const [mode, setMode] = useState<Mode>('select');
-  const [cityName, setCityName] = useState(gt('My Co-op City'));
+  const [cityName, setCityName] = useState(gt('Paradise Shared City'));
   const [joinCode, setJoinCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -281,7 +281,7 @@ export function CoopModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white" aria-describedby={undefined}>
           <VisuallyHidden.Root>
-            <DialogTitle><T>Joining Co-op City</T></DialogTitle>
+            <DialogTitle><T>Joining Shared City</T></DialogTitle>
           </VisuallyHidden.Root>
           {/* Back button in top left */}
           <Button
@@ -315,10 +315,10 @@ export function CoopModal({
         <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-light text-white">
-              <T>Co-op Multiplayer</T>
+              <T>Shared Session</T>
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              <T>Build a city together with friends in real-time</T>
+              <T>Share one live city with humans and autonomous agents</T>
             </DialogDescription>
           </DialogHeader>
 
@@ -349,13 +349,13 @@ export function CoopModal({
         <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-light text-white">
-              <T>Create Co-op City</T>
+              <T>Create Shared City</T>
             </DialogTitle>
             <DialogDescription className="text-slate-400">
               {roomCode ? (
-                <T>Share the invite code with friends</T>
+                <T>Share the invite code with humans or agents</T>
               ) : (
-                <T>Set up your co-op city</T>
+                <T>Set up a shared city for humans and agents</T>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -370,7 +370,7 @@ export function CoopModal({
                   id="cityName"
                   value={cityName}
                   onChange={(e) => setCityName(e.target.value)}
-                  placeholder={gt('My Co-op City')}
+                  placeholder={gt('Paradise Shared City')}
                   className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                 />
               </div>
@@ -477,7 +477,7 @@ export function CoopModal({
       <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
         <DialogHeader>
           <DialogTitle className="text-2xl font-light text-white">
-            <T>Join Co-op City</T>
+            <T>Join Shared City</T>
           </DialogTitle>
           <DialogDescription className="text-slate-400">
             <T>Enter the 5-character invite code to join</T>
