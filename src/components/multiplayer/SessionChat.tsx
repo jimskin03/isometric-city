@@ -4,7 +4,7 @@ import React, { FormEvent, useMemo, useState } from 'react';
 import { MessageSquare, Send, X } from 'lucide-react';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
 
-export function SessionChat({ className = '' }: { className?: string }) {
+export function SessionChat({ className = '', mobile = false }: { className?: string; mobile?: boolean }) {
   const multiplayer = useMultiplayerOptional();
   const [open, setOpen] = useState(true);
   const [body, setBody] = useState('');
@@ -22,14 +22,20 @@ export function SessionChat({ className = '' }: { className?: string }) {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className={`${className} rounded border border-slate-700 bg-slate-950/90 p-2 text-slate-300 shadow-lg`} title="Open shared-session chat">
+      <button
+        onClick={() => setOpen(true)}
+        className={`${className} rounded border border-slate-700 bg-slate-950/90 ${mobile ? 'p-2.5' : 'p-2'} text-slate-300 shadow-lg`}
+        title="Open shared-session chat"
+      >
         <MessageSquare className="h-4 w-4" />
       </button>
     );
   }
 
   return (
-    <div className={`${className} w-80 max-w-[calc(100vw-1rem)] border border-slate-700 bg-slate-950/95 shadow-2xl`}>
+    <div
+      className={`${className} ${mobile ? 'w-full rounded-xl' : 'w-80 max-w-[calc(100vw-1rem)]'} border border-slate-700 bg-slate-950/95 shadow-2xl`}
+    >
       <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2 text-xs text-slate-300">
         <div>
           <span className="font-semibold text-white">Shared Session</span>
@@ -37,7 +43,7 @@ export function SessionChat({ className = '' }: { className?: string }) {
         </div>
         <button onClick={() => setOpen(false)} className="text-slate-500 hover:text-white"><X className="h-4 w-4" /></button>
       </div>
-      <div className="h-56 overflow-y-auto px-3 py-2 text-xs">
+      <div className={`${mobile ? 'h-36 max-h-[30dvh]' : 'h-56'} overflow-y-auto px-3 py-2 text-xs`}>
         {messages.length === 0 ? (
           <div className="text-slate-600">No messages yet. Humans and agents share this channel.</div>
         ) : messages.map((message) => (
