@@ -3,6 +3,7 @@ import type { AgentActor, AgentCitySnapshot, AgentCommand, AgentCommandEnvelope 
 type SessionState = {
   snapshot: AgentCitySnapshot;
   updatedAt: number;
+  inviteCode?: string;
 };
 
 type AgentBridgeStore = {
@@ -26,10 +27,16 @@ function store(): AgentBridgeStore {
   return globalThis.__paradiseAgentBridge;
 }
 
-export function publishAgentSnapshot(sessionId: string, snapshot: AgentCitySnapshot): void {
+export function publishAgentSnapshot(sessionId: string, snapshot: AgentCitySnapshot, inviteCode?: string): void {
   const s = store();
-  s.sessions.set(sessionId, { snapshot, updatedAt: Date.now() });
+  s.sessions.set(sessionId, { snapshot, updatedAt: Date.now(), inviteCode });
   s.latestSessionId = sessionId;
+}
+
+export function sessionInviteValid(sessionId: string | null | undefined, inviteCode: string | null | undefined): boolean {
+  if (!sessionId || !inviteCode) return false;
+  const current = store().sessions.get(sessionId);
+  return !!current?.inviteCode && current.inviteCode === inviteCode.trim().toUpperCase();
 }
 
 export function getAgentSnapshot(sessionId?: string | null): SessionState | null {
@@ -76,6 +83,6 @@ export function listAgentSessions(): Array<{ sessionId: string; updatedAt: numbe
 
 export function agentWriteAuthorized(request: Request): boolean {
   const configuredToken = process.env.PARADISE_AGENT_TOKEN;
-  if (!configuredToken) return true;
+  if (!configuredToken) return false;
   return request.headers.get('x-paradise-agent-token') === configuredToken;
 }

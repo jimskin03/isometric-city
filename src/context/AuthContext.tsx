@@ -89,6 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = getSupabaseClient();
     if (!supabase) return;
     setError(null);
+    const { data: currentSession } = await supabase.auth.getSession();
+    if (currentSession.session?.access_token) {
+      await fetch('/api/coop/invite', {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${currentSession.session.access_token}` },
+      }).catch(() => undefined);
+    }
     const { error: authError } = await supabase.auth.signOut();
     if (authError) setError(authError.message);
   }, []);

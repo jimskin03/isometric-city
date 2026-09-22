@@ -10,8 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 import {
-  PlayIcon,
-  PauseIcon,
   PopulationIcon,
   MoneyIcon,
   HappyIcon,
@@ -31,6 +29,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { LanguageSelector } from '@/components/ui/LanguageSelector';
+import { CoopInviteControls } from '@/components/multiplayer/CoopInviteControls';
 
 // Translatable UI labels
 const UI_LABELS = {
@@ -119,8 +118,8 @@ export function MobileTopBar({
   onShare?: () => void;
   onExit?: () => void;
 }) {
-  const { state, setSpeed, setTaxRate, visualHour, saveCity } = useGame();
-  const { stats, year, month, speed, taxRate, cityName } = state;
+  const { state, setTaxRate, visualHour, saveCity } = useGame();
+  const { stats, year, month, taxRate, cityName } = state;
   const [showDetails, setShowDetails] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showTaxSlider, setShowTaxSlider] = useState(false);
@@ -173,56 +172,10 @@ export function MobileTopBar({
             </div>
           </button>
 
-          {/* Speed controls and exit button */}
+          {/* Language selector, Share, and Exit button group */}
           <div className="flex items-center gap-1">
-            <div className="flex items-center gap-0 bg-secondary rounded-sm h-6 overflow-hidden p-0 m-0">
-              <button
-                onClick={() => setSpeed(0)}
-                className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
-                  speed === 0 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
-                }`}
-                title="Pause"
-              >
-                <PauseIcon size={12} />
-              </button>
-              <button
-                onClick={() => setSpeed(1)}
-                className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
-                  speed === 1 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
-                }`}
-                title="Normal speed"
-              >
-                <PlayIcon size={12} />
-              </button>
-              <button
-                onClick={() => setSpeed(2)}
-                className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
-                  speed === 2 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
-                }`}
-                title="2x speed"
-              >
-                <div className="flex items-center -space-x-[5px]">
-                  <PlayIcon size={12} />
-                  <PlayIcon size={12} />
-                </div>
-              </button>
-              <button
-                onClick={() => setSpeed(3)}
-                className={`h-6 w-6 min-w-6 p-0 m-0 flex items-center justify-center rounded-none ${
-                  speed === 3 ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent/20'
-                }`}
-                title="3x speed"
-              >
-                <div className="flex items-center -space-x-[7px]">
-                  <PlayIcon size={12} />
-                  <PlayIcon size={12} />
-                  <PlayIcon size={12} />
-                </div>
-              </button>
-            </div>
-
-            {/* Language selector, Share, and Exit button group */}
             <div className="flex items-center -space-x-0.5">
+              <CoopInviteControls />
               <LanguageSelector useDrawer iconSize={12} />
 
               {onShare && (

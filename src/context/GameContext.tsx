@@ -56,7 +56,7 @@ export type SavedCityInfo = {
 } | null;
 
 type SharedControlAction =
-  | { type: 'setSpeed'; speed: 0 | 1 | 2 | 3 }
+  | { type: 'setSpeed'; speed: 1 }
   | { type: 'setTaxRate'; rate: number }
   | { type: 'setBudget'; key: keyof Budget; funding: number }
   | { type: 'setDisasters'; enabled: boolean };
@@ -919,9 +919,9 @@ export function GameProvider({ children, startFresh = false, simulationEnabled =
     setState((prev) => ({ ...prev, selectedTool: tool, activePanel: 'none' }));
   }, []);
 
-  const setSpeed = useCallback((speed: 0 | 1 | 2 | 3, isRemote = false) => {
-    setState((prev) => ({ ...prev, speed }));
-    if (!isRemote) controlCallbackRef.current?.({ type: 'setSpeed', speed });
+  const setSpeed = useCallback((_speed: 0 | 1 | 2 | 3, isRemote = false) => {
+    setState((prev) => (prev.speed === 1 ? prev : { ...prev, speed: 1 }));
+    if (!isRemote) controlCallbackRef.current?.({ type: 'setSpeed', speed: 1 });
   }, []);
 
   const setTaxRate = useCallback((rate: number, isRemote = false) => {
