@@ -39,7 +39,15 @@ export function AgentBridge() {
     if (!isStateReady) return;
 
     const sessionId = getOrCreateSessionId();
-    const inviteCode = coop?.coopInvite?.code || new URLSearchParams(window.location.search).get('invite') || undefined;
+    // The session must publish whichever code it holds: the code a guest joined
+    // with, the code a signed-in host generated (activeUserInviteCode), or the
+    // code from the join link. Otherwise the write gate cannot match a valid code
+    // against this session and every agent/guest build is rejected.
+    const inviteCode =
+      coop?.coopInvite?.code ||
+      coop?.activeUserInviteCode ||
+      new URLSearchParams(window.location.search).get('invite') ||
+      undefined;
     let stopped = false;
 
     const publish = async () => {
@@ -156,7 +164,7 @@ export function AgentBridge() {
       window.clearInterval(pollTimer);
       window.clearInterval(founderTimer);
     };
-  }, [addNotification, coop?.coopInvite?.code, executeToolAtTile, isStateReady, latestStateRef, setSpeed, setTaxRate]);
+  }, [addNotification, coop?.activeUserInviteCode, coop?.coopInvite?.code, executeToolAtTile, isStateReady, latestStateRef, setSpeed, setTaxRate]);
 
   return null;
 }

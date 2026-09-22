@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
-type CoopInvite = { code: string; userId: string; userDisplayName: string; sessionId?: string; createdAt: number };
+type CoopInvite = { code: string; userId: string; userDisplayName: string; sessionId?: string; roomCode?: string; createdAt: number; expiresAt?: number };
 type CoopContextValue = {
   isCoopWithCode: boolean;
   coopInvite: CoopInvite | null;
@@ -60,6 +60,24 @@ export function CoopProvider({ children }: { children: React.ReactNode }) {
     if (session?.access_token) await fetch('/api/coop/invite', { method: 'DELETE', headers: { authorization: `Bearer ${session.access_token}` } }).catch(() => undefined);
     setActiveUserInviteCode(null);
   }, [session]);
+
+  // A signed-in host owns a durable invite. Restore it after a reload so the
+  // browser session keeps publishing the code that agents and guests were given.
+  useEffect(() => {
+    if (!user || !session?.access_token || activeUserInviteCode) return;
+    let cancelled = false;
+    void fetch('/api/coop/invite', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${session.access_token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then(async (response) => (response.ok ? ((await response.json()) as { invite?: CoopInvite }) : null))
+      .then((payload) => {
+        if (!cancelled && payload?.invite?.code) setActiveUserInviteCode(payload.invite.code);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [activeUserInviteCode, session, user]);
 
   const leaveCoop = useCallback(() => { sessionStorage.removeItem(STORAGE_KEY); setCoopInvite(null); }, []);
   const value = useMemo(() => ({ isCoopWithCode: !!coopInvite, coopInvite, activeUserInviteCode, generateInviteCode, revokeInviteCode, joinWithCode, leaveCoop }), [coopInvite, activeUserInviteCode, generateInviteCode, revokeInviteCode, joinWithCode, leaveCoop]);

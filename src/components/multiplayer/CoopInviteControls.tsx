@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Copy, Link, Users } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useCoop } from '@/context/CoopContext';
@@ -16,6 +16,10 @@ export function CoopInviteControls() {
   const [inviteCode, setInviteCode] = useState(activeUserInviteCode || '');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+
+  // The host's durable invite is restored asynchronously after a reload (and is
+  // cleared on revoke), so keep the shown code in sync with the context.
+  useEffect(() => { setInviteCode(activeUserInviteCode || ''); }, [activeUserInviteCode]);
 
   const createInvite = async () => {
     const created = await generateInviteCode();
