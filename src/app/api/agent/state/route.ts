@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (!body.sessionId || !body.snapshot) {
     return NextResponse.json({ ok: false, error: 'sessionId and snapshot are required' }, { status: 400 });
   }
-  if (body.inviteCode && !validateCoopInvite(body.inviteCode)) {
+  if (body.inviteCode && !(await validateCoopInvite(body.inviteCode))) {
     return NextResponse.json({ ok: false, error: 'Invalid invite code' }, { status: 401 });
   }
 

@@ -39,6 +39,32 @@ export function sessionInviteValid(sessionId: string | null | undefined, inviteC
   return !!current?.inviteCode && current.inviteCode === inviteCode.trim().toUpperCase();
 }
 
+/**
+ * Find the browser session that published a given invite code. An agent that
+ * presents a valid code should be routed to the session that code belongs to,
+ * not to whichever browser happens to have published state most recently.
+ */
+export function findSessionIdWithInvite(inviteCode: string | null | undefined): string | null {
+  if (!inviteCode) return null;
+  const code = inviteCode.trim().toUpperCase();
+  let best: { sessionId: string; updatedAt: number } | null = null;
+  for (const [sessionId, state] of store().sessions.entries()) {
+    if (state.inviteCode !== code) continue;
+    if (!best || state.updatedAt > best.updatedAt) best = { sessionId, updatedAt: state.updatedAt };
+  }
+  return best?.sessionId ?? null;
+}
+
+/**
+ * Resolve the session a command should target. Agents normally do not know the
+ * browser session id, and the command queue already falls back to the session
+ * that is actively publishing state, so authorization must use the same target.
+ */
+export function resolveAgentSessionId(sessionId?: string | null): string | null {
+  const s = store();
+  return sessionId || s.latestSessionId;
+}
+
 export function getAgentSnapshot(sessionId?: string | null): SessionState | null {
   const s = store();
   const id = sessionId || s.latestSessionId;
@@ -76,7 +102,7 @@ export function listAgentSessions(): Array<{ sessionId: string; updatedAt: numbe
     .map(([sessionId, value]) => ({
       sessionId,
       updatedAt: value.updatedAt,
-      cityName: value.snapshot.city.name,
+      cityName: value.snapshot?.city?.name ?? 'Paradise City',
     }))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }

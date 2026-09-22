@@ -53,12 +53,12 @@ npm run agent -- instructions --url https://isometric-city.onrender.com
 npm run agent -- state --url https://isometric-city.onrender.com
 npm run agent -- bootstrap --url https://isometric-city.onrender.com
 npm run agent -- place road 20 20 --url https://isometric-city.onrender.com
-npm run agent -- speed 2 --url https://isometric-city.onrender.com
+npm run agent -- speed 1 --url https://isometric-city.onrender.com
 ```
 
 Set `PARADISE_AGENT_TOKEN` on the server and in the agent environment to protect command writes. If no token is configured, command writes are intentionally open for development.
 
-When a genuinely blank city opens, the built-in founder planner automatically establishes a small starter road/zoning district and starts simulation speed 2. It uses the same placement and treasury rules as human construction, so the world can begin without waiting for a human player.
+When a genuinely blank city opens, the built-in founder planner automatically establishes a small starter road/zoning district and starts simulation speed 1 (1x). It uses the same placement and treasury rules as human construction, so the world can begin without waiting for a human player.
 
 ## Project direction
 

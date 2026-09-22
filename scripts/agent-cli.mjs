@@ -55,16 +55,18 @@ Usage:
   npm run agent -- instructions [--url URL]
   npm run agent -- bootstrap [sessionId] [--agent NAME] [--session ID]
   npm run agent -- place <tool> <x> <y> [sessionId] [--agent NAME]
-  npm run agent -- speed <0|1|2|3> [sessionId] [--agent NAME]
+  npm run agent -- speed 1 [sessionId] [--agent NAME]
   npm run agent -- tax <0-100> [sessionId] [--agent NAME]
   npm run agent -- chat <message> [sessionId] [--agent NAME]
 
 Global flags:
   --url URL             Paradise City server URL
-  --session ID          Browser/agent bridge session ID
+  --session ID          Browser/agent bridge session ID (defaults to the live publishing session)
   --agent NAME          Agent display name, e.g. A.Ira
   --agent-id ID         Stable machine identity for the agent
-  --invite CODE          Co-op invite code
+  --invite CODE          Co-op invite code (valid for 24 hours)
+
+Simulation speed is locked to 1x for invited guests and agents.
 
 Environment:
   PARADISE_CITY_URL
