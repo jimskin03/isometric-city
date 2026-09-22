@@ -162,6 +162,30 @@ export async function loadGameRoom(
 }
 
 /**
+ * Load or create game room (ensures canonical rooms exist)
+ */
+export async function loadOrCreateGameRoom(
+  roomCode: string,
+  cityName: string,
+  fallbackInitialState: MultiplayerGameState,
+  createdBy?: string | null
+): Promise<{ gameState: MultiplayerGameState; cityName: string; stateRevision: number; createdNew: boolean } | null> {
+  const existing = await loadGameRoom(roomCode);
+  if (existing) {
+    return { ...existing, createdNew: false };
+  }
+  const created = await createGameRoom(roomCode, cityName, fallbackInitialState, createdBy);
+  if (created) {
+    return { gameState: fallbackInitialState, cityName, stateRevision: 0, createdNew: true };
+  }
+  const retry = await loadGameRoom(roomCode);
+  if (retry) {
+    return { ...retry, createdNew: false };
+  }
+  return null;
+}
+
+/**
  * Update game state in a room
  * PERF: Uses Web Worker for serialization + compression - no main thread blocking!
  * @throws CitySizeLimitError if the city size exceeds the maximum allowed size

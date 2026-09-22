@@ -15,6 +15,7 @@ import {
 import {
   createGameRoom,
   loadGameRoom,
+  loadOrCreateGameRoom,
   updateGameRoom,
   updatePlayerCount,
   loadGameRoomMessages,
@@ -23,6 +24,7 @@ import {
 } from './database';
 import { msg } from 'gt-next';
 import { getSupabaseClient } from '@/lib/supabase';
+import { PARADISE_CITY } from '@/config/paradise';
 
 const STATE_SAVE_INTERVAL = 3000;
 
@@ -121,6 +123,7 @@ export class MultiplayerProvider {
   async connect(): Promise<void> {
     if (this.destroyed) return;
 
+    const isUnifiedRoom = this.roomCode === PARADISE_CITY.unifiedRoomCode.toUpperCase();
     if (this.isCreator && this.gameState) {
       try {
         const success = await createGameRoom(
@@ -130,16 +133,42 @@ export class MultiplayerProvider {
           this.options.userId ?? null,
         );
         if (!success) {
-          this.options.onError?.(msg('Failed to create room in database'));
-          throw new Error(msg('Failed to create room in database'));
+          // If room already exists, load existing room
+          const loaded = await loadGameRoom(this.roomCode);
+          if (loaded) {
+            this.gameState = loaded.gameState;
+            this.stateRevision = loaded.stateRevision;
+            this.options.onStateReceived?.(loaded.gameState, loaded.stateRevision);
+          } else {
+            this.options.onError?.(msg('Failed to create room in database'));
+            throw new Error(msg('Failed to create room in database'));
+          }
+        } else {
+          this.stateRevision = 0;
         }
-        this.stateRevision = 0;
       } catch (error) {
         if (error instanceof CitySizeLimitError) this.options.onError?.(error.message);
         throw error;
       }
     } else {
-      const roomData = await loadGameRoom(this.roomCode);
+      let roomData = await loadGameRoom(this.roomCode);
+      if (!roomData && (isUnifiedRoom || this.options.initialGameState)) {
+        if (this.options.initialGameState) {
+          const loadedOrCreate = await loadOrCreateGameRoom(
+            this.roomCode,
+            this.options.cityName,
+            this.options.initialGameState,
+            this.options.userId ?? null
+          );
+          if (loadedOrCreate) {
+            roomData = loadedOrCreate;
+            if (loadedOrCreate.createdNew) {
+              this.isHostValue = true;
+              this.player.isHost = true;
+            }
+          }
+        }
+      }
       if (!roomData) {
         this.options.onError?.(msg('Room not found'));
         throw new Error(msg('Room not found'));
@@ -491,6 +520,18 @@ export class MultiplayerProvider {
         }, delay);
       }
     }
+  }
+
+  updatePlayer(info: { name?: string; userId?: string | null; email?: string | null }): void {
+    if (this.destroyed) return;
+    if (info.name) this.player.name = info.name;
+    if (info.userId !== undefined) this.player.userId = info.userId ?? undefined;
+    if (info.email !== undefined) this.player.email = info.email ?? undefined;
+    this.players.set(this.peerId, this.player);
+    if (this.subscribed) {
+      void this.channel.track({ player: this.player });
+    }
+    this.options.onPlayersChange?.(Array.from(this.players.values()));
   }
 
   private updateConnectionStatus(connected: boolean): void {

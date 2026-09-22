@@ -18,6 +18,7 @@ import { useTipSystem } from '@/hooks/useTipSystem';
 import { useMultiplayerSync } from '@/hooks/useMultiplayerSync';
 import { useCopyRoomLink } from '@/hooks/useCopyRoomLink';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
+import { useAuth } from '@/context/AuthContext';
 import { ShareModal } from '@/components/multiplayer/ShareModal';
 import { SessionChat } from '@/components/multiplayer/SessionChat';
 import { Copy, Check, Users } from 'lucide-react';
@@ -54,6 +55,15 @@ export default function Game({ onExit }: { onExit?: () => void }) {
   const isMobile = isMobileDevice || isSmallScreen;
   const [showShareModal, setShowShareModal] = useState(false);
   const multiplayer = useMultiplayerOptional();
+  const { user } = useAuth();
+  const isAuthenticated = !!user;
+
+  // Unauthenticated visitors are spectators: lock tool to 'select'
+  useEffect(() => {
+    if (!isAuthenticated && state.selectedTool !== 'select') {
+      setTool('select');
+    }
+  }, [isAuthenticated, state.selectedTool, setTool]);
   
   // Cheat code system
   const {
@@ -262,7 +272,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
           )}
           
           {/* Main canvas area - fills remaining space, with padding for top/bottom bars */}
-          <div className="flex-1 relative overflow-hidden" style={{ paddingTop: '72px', paddingBottom: '76px' }}>
+          <div className="flex-1 relative overflow-hidden" style={{ paddingTop: '72px', paddingBottom: isAuthenticated ? '76px' : '16px' }}>
             <CanvasIsometricGrid 
               overlayMode={overlayMode} 
               selectedTile={selectedTile} 
@@ -314,12 +324,14 @@ export default function Game({ onExit }: { onExit?: () => void }) {
             <SessionChat mobile className="pointer-events-auto max-w-md" />
           </div>
           
-          {/* Mobile Bottom Toolbar */}
-          <MobileToolbar 
-            onOpenPanel={(panel) => setActivePanel(panel)}
-            overlayMode={overlayMode}
-            setOverlayMode={setOverlayMode}
-          />
+          {/* Mobile Bottom Toolbar - only visible when user is registered/logged in */}
+          {isAuthenticated && (
+            <MobileToolbar 
+              onOpenPanel={(panel) => setActivePanel(panel)}
+              overlayMode={overlayMode}
+              setOverlayMode={setOverlayMode}
+            />
+          )}
           
           {/* Panels - render as fullscreen modals on mobile */}
           {state.activePanel === 'budget' && <BudgetPanel />}
@@ -346,9 +358,9 @@ export default function Game({ onExit }: { onExit?: () => void }) {
     <TooltipProvider>
       <div className="w-full h-full min-h-[720px] overflow-hidden bg-background flex">
         <AgentBridge />
-        <Sidebar onExit={onExit} />
+        {isAuthenticated && <Sidebar onExit={onExit} />}
         
-        <div className="flex-1 flex flex-col ml-56">
+        <div className={`flex-1 flex flex-col ${isAuthenticated ? 'ml-56' : 'ml-0'} transition-[margin] duration-200`}>
           <TopBar />
           <StatsPanel />
           <div className="flex-1 relative overflow-visible">
@@ -361,7 +373,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
               onViewportChange={setViewport}
               onBargeDelivery={handleBargeDelivery}
             />
-            <OverlayModeToggle overlayMode={overlayMode} setOverlayMode={setOverlayMode} />
+            {isAuthenticated && <OverlayModeToggle overlayMode={overlayMode} setOverlayMode={setOverlayMode} />}
             <MiniMap onNavigate={(x, y) => setNavigationTarget({ x, y })} viewport={viewport} />
             
             <SessionChat className="absolute bottom-4 right-48 z-30" />

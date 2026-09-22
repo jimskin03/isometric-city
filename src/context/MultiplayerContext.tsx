@@ -17,6 +17,8 @@ import {
 } from '@/lib/multiplayer/types';
 import { useGT } from 'gt-next';
 import { useAuth } from '@/context/AuthContext';
+import { PARADISE_CITY } from '@/config/paradise';
+import { createInitialGameState, DEFAULT_GRID_SIZE } from '@/lib/simulation';
 
 function generateRoomCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -32,7 +34,8 @@ interface MultiplayerContextValue {
   chatMessages: ChatMessage[];
   error: string | null;
   createRoom: (cityName: string, initialState: MultiplayerGameState) => Promise<string>;
-  joinRoom: (roomCode: string) => Promise<RoomData>;
+  joinRoom: (roomCode: string, fallbackInitialState?: MultiplayerGameState) => Promise<RoomData>;
+  connectUnifiedRoom: (fallbackInitialState?: MultiplayerGameState) => Promise<RoomData>;
   leaveRoom: () => void;
   dispatchAction: (action: GameActionInput) => void;
   sendChat: (body: string, actor?: ChatActorOverride) => Promise<ChatMessage | null>;
@@ -46,7 +49,13 @@ interface MultiplayerContextValue {
 
 const MultiplayerContext = createContext<MultiplayerContextValue | null>(null);
 
-export function MultiplayerContextProvider({ children }: { children: React.ReactNode }) {
+export function MultiplayerContextProvider({
+  children,
+  autoConnectUnified = false,
+}: {
+  children: React.ReactNode;
+  autoConnectUnified?: boolean;
+}) {
   const gt = useGT();
   const { user, displayName } = useAuth();
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
@@ -116,19 +125,21 @@ export function MultiplayerContextProvider({ children }: { children: React.React
     }
   }, [displayName, gt, providerCallbacks, user]);
 
-  const joinRoom = useCallback(async (code: string): Promise<RoomData> => {
+  const joinRoom = useCallback(async (code: string, fallbackInitialState?: MultiplayerGameState): Promise<RoomData> => {
     setConnectionState('connecting');
     setError(null);
     setChatMessages([]);
     try {
       const normalizedCode = code.toUpperCase();
+      const isUnified = normalizedCode === PARADISE_CITY.unifiedRoomCode.toUpperCase();
       const nextProvider = await createMultiplayerProvider({
         roomCode: normalizedCode,
-        cityName: gt('Shared City'),
+        cityName: isUnified ? PARADISE_CITY.name : gt('Shared City'),
         playerName: displayName || undefined,
         participantType: 'human',
         userId: user?.id,
         userEmail: user?.email,
+        initialGameState: fallbackInitialState,
         ...providerCallbacks(),
         onStateReceived: (state) => setInitialState(state),
       });
@@ -139,7 +150,7 @@ export function MultiplayerContextProvider({ children }: { children: React.React
       return {
         code: normalizedCode,
         hostId: '',
-        cityName: gt('Shared City'),
+        cityName: isUnified ? PARADISE_CITY.name : gt('Shared City'),
         createdAt: Date.now(),
         playerCount: 1,
       };
@@ -149,6 +160,31 @@ export function MultiplayerContextProvider({ children }: { children: React.React
       throw err;
     }
   }, [displayName, gt, providerCallbacks, user]);
+
+  const connectUnifiedRoom = useCallback(async (fallbackInitialState?: MultiplayerGameState): Promise<RoomData> => {
+    const fallback = fallbackInitialState || (createInitialGameState(DEFAULT_GRID_SIZE, PARADISE_CITY.name) as MultiplayerGameState);
+    return joinRoom(PARADISE_CITY.unifiedRoomCode, fallback);
+  }, [joinRoom]);
+
+  // Sync auth state changes into active player presence
+  useEffect(() => {
+    if (providerRef.current) {
+      providerRef.current.updatePlayer({
+        name: displayName || undefined,
+        userId: user?.id ?? null,
+        email: user?.email ?? null,
+      });
+    }
+  }, [user, displayName]);
+
+  // Auto-connect to unified room if configured
+  useEffect(() => {
+    if (autoConnectUnified && connectionState === 'disconnected' && !roomCode) {
+      void connectUnifiedRoom().catch((err) => {
+        console.warn('Auto-connect to unified room encountered an error, falling back to local simulation:', err);
+      });
+    }
+  }, [autoConnectUnified, connectionState, roomCode, connectUnifiedRoom]);
 
   const leaveRoom = useCallback(() => {
     providerRef.current?.destroy();
@@ -185,6 +221,7 @@ export function MultiplayerContextProvider({ children }: { children: React.React
     error,
     createRoom,
     joinRoom,
+    connectUnifiedRoom,
     leaveRoom,
     dispatchAction,
     sendChat,

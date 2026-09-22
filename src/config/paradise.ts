@@ -2,6 +2,8 @@ export const PARADISE_CITY = {
   name: 'Paradise City',
   defaultCityName: 'Paradise City',
   description: 'Paradise City is a compact isometric city-building simulation in the CryptGreg universe.',
+  unifiedRoomCode: 'PARADISE',
+  isUnifiedWorld: true,
   storage: {
     // Keep the legacy IsoCity key values for now so existing local saves remain loadable.
     gameState: 'isocity-game-state',

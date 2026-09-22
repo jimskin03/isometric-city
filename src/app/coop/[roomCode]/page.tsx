@@ -71,6 +71,11 @@ export default function CoopPage() {
   // Ref to track that we're intentionally starting the game (not closing to go home)
   const isStartingGameRef = useRef(false);
 
+  // In unified continuous gameplay, route all traffic to the canonical unified world
+  React.useEffect(() => {
+    router.replace('/');
+  }, [router]);
+
   // Handle exit from game - navigate back to homepage
   const handleExitGame = () => {
     router.push('/');
