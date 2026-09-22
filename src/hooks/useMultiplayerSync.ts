@@ -143,7 +143,7 @@ export function useMultiplayerSync() {
         break;
         
       case 'setSpeed':
-        game.setSpeed(action.speed, true);
+        game.setSpeed(1, true);
         break;
         
       case 'setDisasters':
@@ -339,8 +339,8 @@ export function useMultiplayerSync() {
   }, [broadcastAction]);
 
   // Helper to broadcast speed change
-  const broadcastSpeed = useCallback((speed: 0 | 1 | 2 | 3) => {
-    broadcastAction({ type: 'setSpeed', speed });
+  const broadcastSpeed = useCallback((_speed: 0 | 1 | 2 | 3) => {
+    broadcastAction({ type: 'setSpeed', speed: 1 });
   }, [broadcastAction]);
 
   // Helper to broadcast disasters toggle

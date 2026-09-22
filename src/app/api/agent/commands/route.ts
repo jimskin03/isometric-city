@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { AgentActor, AgentCommand } from '@/lib/agent/protocol';
-import { agentWriteAuthorized, drainAgentCommands, queueAgentCommand } from '@/lib/agent/serverBridge';
+import { agentWriteAuthorized, drainAgentCommands, queueAgentCommand, sessionInviteValid } from '@/lib/agent/serverBridge';
+import { validateCoopInvite } from '@/lib/coop/inviteStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,11 +14,19 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!agentWriteAuthorized(request)) {
-    return NextResponse.json({ ok: false, error: 'Invalid agent token' }, { status: 401 });
+  const inviteCode = request.headers.get('x-paradise-invite-code');
+  const inviteValid = !!inviteCode && !!validateCoopInvite(inviteCode);
+  if (!inviteValid && !agentWriteAuthorized(request)) {
+    return NextResponse.json({ ok: false, error: 'Invalid agent token or invite code' }, { status: 401 });
   }
 
-  const body = await request.json() as { sessionId?: string; command?: AgentCommand; actor?: AgentActor };
+  const body = await request.json() as { sessionId?: string; inviteCode?: string; command?: AgentCommand; actor?: AgentActor };
+  const bodyInviteValid = !!body.inviteCode && !!validateCoopInvite(body.inviteCode);
+  const sessionId = body.sessionId;
+  const scopedInviteValid = (inviteValid || bodyInviteValid) && sessionInviteValid(sessionId, inviteCode || body.inviteCode);
+  if (!scopedInviteValid && !agentWriteAuthorized(request)) {
+    return NextResponse.json({ ok: false, error: 'Invalid agent token or invite code' }, { status: 401 });
+  }
   if (!body.command || typeof body.command.type !== 'string') {
     return NextResponse.json({ ok: false, error: 'command is required' }, { status: 400 });
   }

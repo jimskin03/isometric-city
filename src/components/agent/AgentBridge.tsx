@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
+import { useCoopOptional } from '@/context/CoopContext';
 import type { AgentCommandEnvelope } from '@/lib/agent/protocol';
 import { createAgentSnapshot, createFounderPlan, isBlankCity } from '@/lib/agent/protocol';
 
@@ -27,6 +28,7 @@ export function AgentBridge() {
   } = useGame();
   const founderStartedRef = useRef(false);
   const multiplayer = useMultiplayerOptional();
+  const coop = useCoopOptional();
   const multiplayerRef = useRef(multiplayer);
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export function AgentBridge() {
     if (!isStateReady) return;
 
     const sessionId = getOrCreateSessionId();
+    const inviteCode = coop?.coopInvite?.code || new URLSearchParams(window.location.search).get('invite') || undefined;
     let stopped = false;
 
     const publish = async () => {
@@ -60,7 +63,7 @@ export function AgentBridge() {
         await fetch('/api/agent/state', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ sessionId, snapshot }),
+          body: JSON.stringify({ sessionId, snapshot, inviteCode }),
           cache: 'no-store',
         });
       } catch (error) {
@@ -73,7 +76,7 @@ export function AgentBridge() {
       if (!isBlankCity(current)) return;
       const plan = createFounderPlan(current);
       for (const action of plan) executeToolAtTile(action.tool, action.x, action.y);
-      setSpeed(2);
+      setSpeed(1);
       addNotification(
         'Founder planner active',
         `An autonomous planner established the first district with ${plan.length} legal build actions.`,
@@ -93,7 +96,7 @@ export function AgentBridge() {
           }
           break;
         case 'set_speed':
-          setSpeed(command.speed);
+          setSpeed(1);
           break;
         case 'set_tax':
           setTaxRate(command.rate);
@@ -153,7 +156,7 @@ export function AgentBridge() {
       window.clearInterval(pollTimer);
       window.clearInterval(founderTimer);
     };
-  }, [addNotification, executeToolAtTile, isStateReady, latestStateRef, setSpeed, setTaxRate]);
+  }, [addNotification, coop?.coopInvite?.code, executeToolAtTile, isStateReady, latestStateRef, setSpeed, setTaxRate]);
 
   return null;
 }

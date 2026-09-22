@@ -15,6 +15,7 @@ const explicitSessionId = takeFlag('--session');
 const agentName = takeFlag('--agent') || process.env.PARADISE_AGENT_NAME || 'Paradise Agent';
 const agentId = takeFlag('--agent-id') || process.env.PARADISE_AGENT_ID || `agent-${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'planner'}`;
 const token = process.env.PARADISE_AGENT_TOKEN;
+const inviteCode = takeFlag('--invite') || process.env.PARADISE_INVITE_CODE;
 const actor = { id: agentId, name: agentName };
 const [action, ...args] = argv;
 
@@ -22,6 +23,7 @@ function headers(withJson = false) {
   const value = {};
   if (withJson) value['content-type'] = 'application/json';
   if (token) value['x-paradise-agent-token'] = token;
+  if (inviteCode) value['x-paradise-invite-code'] = inviteCode;
   return value;
 }
 
@@ -62,12 +64,14 @@ Global flags:
   --session ID          Browser/agent bridge session ID
   --agent NAME          Agent display name, e.g. A.Ira
   --agent-id ID         Stable machine identity for the agent
+  --invite CODE          Co-op invite code
 
 Environment:
   PARADISE_CITY_URL
   PARADISE_AGENT_TOKEN
   PARADISE_AGENT_NAME
   PARADISE_AGENT_ID
+  PARADISE_INVITE_CODE
 
 For shared sessions, state.sharedSession contains the room code, participants and recent human/agent chat. Agents should inspect state, coordinate through chat when useful, execute legal actions, then inspect state again.`);
 }
@@ -98,7 +102,7 @@ switch (action) {
   }
   case 'speed': {
     const speed = Number(args[0]);
-    if (![0, 1, 2, 3].includes(speed)) {
+    if (speed !== 1) {
       usage();
       process.exit(1);
     }

@@ -3,9 +3,14 @@
 import React, { FormEvent, useMemo, useState } from 'react';
 import { MessageSquare, Send, X } from 'lucide-react';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
+import { useAuth } from '@/context/AuthContext';
+import { useCoopOptional } from '@/context/CoopContext';
 
 export function SessionChat({ className = '', mobile = false }: { className?: string; mobile?: boolean }) {
   const multiplayer = useMultiplayerOptional();
+  const { user } = useAuth();
+  const coop = useCoopOptional();
+  const canChat = !!user || !!coop?.isCoopWithCode;
   const [open, setOpen] = useState(true);
   const [body, setBody] = useState('');
 
@@ -16,6 +21,7 @@ export function SessionChat({ className = '', mobile = false }: { className?: st
     event.preventDefault();
     const text = body.trim();
     if (!text) return;
+    if (!canChat) return;
     setBody('');
     void multiplayer.sendChat(text);
   };
@@ -58,10 +64,14 @@ export function SessionChat({ className = '', mobile = false }: { className?: st
           </div>
         ))}
       </div>
-      <form onSubmit={submit} className="flex border-t border-slate-800">
-        <input value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} placeholder="Message humans or agents…" className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs text-white outline-none placeholder:text-slate-600" />
-        <button type="submit" className="px-3 text-slate-400 hover:text-white" aria-label="Send message"><Send className="h-4 w-4" /></button>
-      </form>
+      {canChat ? (
+        <form onSubmit={submit} className="flex border-t border-slate-800">
+          <input value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} placeholder="Message humans or agents…" className="min-w-0 flex-1 bg-transparent px-3 py-2 text-xs text-white outline-none placeholder:text-slate-600" />
+          <button type="submit" className="px-3 text-slate-400 hover:text-white" aria-label="Send message"><Send className="h-4 w-4" /></button>
+        </form>
+      ) : (
+        <div className="border-t border-slate-800 px-3 py-2 text-[11px] text-slate-500">Chat is read-only for spectators. Sign in or enter an invite code to chat.</div>
+      )}
     </div>
   );
 }

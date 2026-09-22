@@ -14,7 +14,7 @@ export type AgentPlaceAction = {
 export type AgentCommand =
   | { type: 'place'; tool: Tool; x: number; y: number }
   | { type: 'batch_place'; actions: AgentPlaceAction[] }
-  | { type: 'set_speed'; speed: 0 | 1 | 2 | 3 }
+  | { type: 'set_speed'; speed: 1 }
   | { type: 'set_tax'; rate: number }
   | { type: 'bootstrap_city' }
   | { type: 'chat'; message: string };
