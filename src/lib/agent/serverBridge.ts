@@ -1,4 +1,10 @@
-import type { AgentActor, AgentCitySnapshot, AgentCommand, AgentCommandEnvelope } from './protocol';
+import type {
+  AgentActor,
+  AgentCitySnapshot,
+  AgentCommand,
+  AgentCommandEnvelope,
+  CommandExecutionResult,
+} from './protocol';
 
 type SessionState = {
   snapshot: AgentCitySnapshot;
@@ -9,6 +15,7 @@ type SessionState = {
 type AgentBridgeStore = {
   sessions: Map<string, SessionState>;
   queues: Map<string, AgentCommandEnvelope[]>;
+  results: Map<string, CommandExecutionResult>;
   latestSessionId: string | null;
 };
 
@@ -21,6 +28,7 @@ function store(): AgentBridgeStore {
     globalThis.__paradiseAgentBridge = {
       sessions: new Map(),
       queues: new Map(),
+      results: new Map(),
       latestSessionId: null,
     };
   }
@@ -72,21 +80,45 @@ export function getAgentSnapshot(sessionId?: string | null): SessionState | null
   return s.sessions.get(id) ?? null;
 }
 
-export function queueAgentCommand(command: AgentCommand, sessionId?: string | null, actor?: AgentActor): AgentCommandEnvelope {
+export function isExecutorAlive(sessionId?: string | null): boolean {
+  const snapshot = getAgentSnapshot(sessionId);
+  if (!snapshot) return false;
+  return Date.now() - snapshot.updatedAt < 5000;
+}
+
+export function queueAgentCommand(
+  command: AgentCommand,
+  sessionId?: string | null,
+  actor?: AgentActor
+): AgentCommandEnvelope {
   const s = store();
   const target = sessionId || s.latestSessionId;
-  if (!target) throw new Error('No active Paradise City game session is connected.');
+  if (!target) {
+    // If no target yet, generate a default canonical session id so server can process
+    const fallbackId = 'canonical-paradise-session';
+    s.latestSessionId = fallbackId;
+  }
+
+  const resolvedTarget = sessionId || s.latestSessionId || 'canonical-paradise-session';
 
   const envelope: AgentCommandEnvelope = {
     id: crypto.randomUUID(),
-    sessionId: target,
+    sessionId: resolvedTarget,
     command,
     actor,
     createdAt: Date.now(),
   };
-  const queue = s.queues.get(target) ?? [];
+
+  // Register initial 'queued' status
+  s.results.set(envelope.id, {
+    commandId: envelope.id,
+    status: 'queued',
+    totalCostCharged: 0,
+  });
+
+  const queue = s.queues.get(resolvedTarget) ?? [];
   queue.push(envelope);
-  s.queues.set(target, queue.slice(-200));
+  s.queues.set(resolvedTarget, queue.slice(-200));
   return envelope;
 }
 
@@ -95,6 +127,16 @@ export function drainAgentCommands(sessionId: string): AgentCommandEnvelope[] {
   const queue = s.queues.get(sessionId) ?? [];
   s.queues.set(sessionId, []);
   return queue;
+}
+
+export function recordCommandResult(result: CommandExecutionResult): void {
+  const s = store();
+  s.results.set(result.commandId, result);
+}
+
+export function getCommandResult(commandId: string): CommandExecutionResult | null {
+  const s = store();
+  return s.results.get(commandId) ?? null;
 }
 
 export function listAgentSessions(): Array<{ sessionId: string; updatedAt: number; cityName: string }> {

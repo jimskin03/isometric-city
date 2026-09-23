@@ -14,7 +14,7 @@ export type AgentPlaceAction = {
 export type AgentCommand =
   | { type: 'place'; tool: Tool; x: number; y: number }
   | { type: 'batch_place'; actions: AgentPlaceAction[] }
-  | { type: 'set_speed'; speed: 1 }
+  | { type: 'set_speed'; speed: 0 | 1 | 2 | 3 }
   | { type: 'set_tax'; rate: number }
   | { type: 'bootstrap_city' }
   | { type: 'chat'; message: string };
@@ -27,9 +27,35 @@ export type AgentCommandEnvelope = {
   createdAt: number;
 };
 
+export type CommandExecutionState = 'queued' | 'applied' | 'rejected';
+
+export type ActionExecutionResult = {
+  tool: Tool;
+  x: number;
+  y: number;
+  status: 'applied' | 'rejected';
+  costCharged: number;
+  reason?: 'occupied' | 'water' | 'insufficient_funds' | 'out_of_bounds' | 'not_authorized' | 'invalid_tool';
+  buildingType?: string;
+};
+
+export type CommandExecutionResult = {
+  commandId: string;
+  status: CommandExecutionState;
+  appliedAt?: number;
+  totalCostCharged: number;
+  reason?: string;
+  actionResults?: ActionExecutionResult[];
+};
+
 export type AgentCitySnapshot = {
   sessionId: string;
   observedAt: number;
+  stateVersion: number;
+  simulationTick: number;
+  lastTickAt: number;
+  lastStateChangeAt: number;
+  lastPublisherSeenAt: number;
   city: {
     id: string;
     name: string;
@@ -55,6 +81,10 @@ export type AgentCitySnapshot = {
     zone: string;
     powered: boolean;
     watered: boolean;
+    constructionProgress?: number;
+    capacity?: number;
+    jobs?: number;
+    level?: number;
   }>;
 };
 
@@ -88,15 +118,25 @@ export function createAgentSnapshot(
           zone: tile.zone,
           powered: Boolean(tile.building.powered),
           watered: Boolean(tile.building.watered),
+          constructionProgress: tile.building.constructionProgress ?? 100,
+          level: tile.building.level ?? 1,
         });
       }
       return tileSymbol(state, x, y);
     }).join(''),
   );
 
+  const now = Date.now();
+  const ticks = (state.stats.population || 0) + (state.stats.jobs || 0) + (state.month || 0);
+
   return {
     sessionId,
-    observedAt: Date.now(),
+    observedAt: now,
+    stateVersion: state.gameVersion || 1,
+    simulationTick: ticks,
+    lastTickAt: now,
+    lastStateChangeAt: now,
+    lastPublisherSeenAt: now,
     city: {
       id: state.id,
       name: state.cityName,

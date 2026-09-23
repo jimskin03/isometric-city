@@ -3,22 +3,46 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
-type CoopInvite = { code: string; userId: string; userDisplayName: string; sessionId?: string; roomCode?: string; createdAt: number; expiresAt?: number };
-type CoopContextValue = {
+export type CoopInvite = {
+  code: string;
+  userId: string;
+  userDisplayName: string;
+  sessionId?: string;
+  roomCode?: string;
+  createdAt: number;
+  expiresAt?: number;
+};
+export type CoopGuestInfo = CoopInvite;
+
+export type CoopContextValue = {
   isCoopWithCode: boolean;
   coopInvite: CoopInvite | null;
+  coopGuestInfo: CoopGuestInfo | null;
   activeUserInviteCode: string | null;
+  activeHostCode: string | null;
   generateInviteCode: () => Promise<string | null>;
   revokeInviteCode: () => Promise<void>;
   joinWithCode: (code: string) => Promise<boolean>;
   leaveCoop: () => void;
+  openInviteDialog: boolean;
+  setOpenInviteDialog: (open: boolean) => void;
+  openJoinDialog: boolean;
+  setOpenJoinDialog: (open: boolean) => void;
 };
 const CoopContext = createContext<CoopContextValue | null>(null);
 const STORAGE_KEY = 'paradise-coop-invite';
 
 export function CoopProvider({ children }: { children: React.ReactNode }) {
   const { user, session } = useAuth();
-  const [coopInvite, setCoopInvite] = useState<CoopInvite | null>(null);
+  const [coopInvite, setCoopInvite] = useState<CoopInvite | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const stored = sessionStorage.getItem(STORAGE_KEY);
+      return stored ? (JSON.parse(stored) as CoopInvite) : null;
+    } catch {
+      return null;
+    }
+  });
   const [activeUserInviteCode, setActiveUserInviteCode] = useState<string | null>(null);
 
   const joinWithCode = useCallback(async (rawCode: string) => {
@@ -26,21 +50,24 @@ export function CoopProvider({ children }: { children: React.ReactNode }) {
     if (!code) return false;
     const response = await fetch(`/api/coop/invite?code=${encodeURIComponent(code)}`, { cache: 'no-store' });
     if (!response.ok) return false;
-    const payload = await response.json() as { invite?: CoopInvite };
+    const payload = (await response.json()) as { invite?: CoopInvite };
     if (!payload.invite) return false;
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload.invite));
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload.invite));
+    }
     setCoopInvite(payload.invite);
     return true;
   }, []);
 
   useEffect(() => {
-    if (!sessionStorage) return;
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try { setCoopInvite(JSON.parse(stored) as CoopInvite); } catch { sessionStorage.removeItem(STORAGE_KEY); }
-    }
+    if (typeof window === 'undefined') return;
     const code = new URLSearchParams(window.location.search).get('invite');
-    if (code) void joinWithCode(code);
+    if (code) {
+      const timer = setTimeout(() => {
+        void joinWithCode(code);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
   }, [joinWithCode]);
 
   const generateInviteCode = useCallback(async () => {
@@ -79,8 +106,38 @@ export function CoopProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [activeUserInviteCode, session, user]);
 
+  const [openInviteDialog, setOpenInviteDialog] = useState(false);
+  const [openJoinDialog, setOpenJoinDialog] = useState(false);
+
   const leaveCoop = useCallback(() => { sessionStorage.removeItem(STORAGE_KEY); setCoopInvite(null); }, []);
-  const value = useMemo(() => ({ isCoopWithCode: !!coopInvite, coopInvite, activeUserInviteCode, generateInviteCode, revokeInviteCode, joinWithCode, leaveCoop }), [coopInvite, activeUserInviteCode, generateInviteCode, revokeInviteCode, joinWithCode, leaveCoop]);
+  const effectiveHostCode = user ? activeUserInviteCode : null;
+  const value = useMemo(
+    () => ({
+      isCoopWithCode: !!coopInvite,
+      coopInvite,
+      coopGuestInfo: coopInvite,
+      activeUserInviteCode: effectiveHostCode,
+      activeHostCode: effectiveHostCode,
+      generateInviteCode,
+      revokeInviteCode,
+      joinWithCode,
+      leaveCoop,
+      openInviteDialog,
+      setOpenInviteDialog,
+      openJoinDialog,
+      setOpenJoinDialog,
+    }),
+    [
+      coopInvite,
+      effectiveHostCode,
+      generateInviteCode,
+      revokeInviteCode,
+      joinWithCode,
+      leaveCoop,
+      openInviteDialog,
+      openJoinDialog,
+    ]
+  );
   return <CoopContext.Provider value={value}>{children}</CoopContext.Provider>;
 }
 export function useCoop() { const value = useContext(CoopContext); if (!value) throw new Error('useCoop must be used inside CoopProvider'); return value; }

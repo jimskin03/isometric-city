@@ -24,21 +24,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session);
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        setLoading(false);
+      }
+    }, 1500);
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
       setLoading(false);
-    });
+      clearTimeout(timeout);
+      return;
+    }
+
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        setSession(data.session);
+        setLoading(false);
+        clearTimeout(timeout);
+      })
+      .catch((err) => {
+        console.warn('[Auth] getSession failed, continuing as guest:', err);
+        if (mounted) {
+          setLoading(false);
+          clearTimeout(timeout);
+        }
+      });
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!mounted) return;
       setSession(nextSession);
       setLoading(false);
+      clearTimeout(timeout);
     });
+
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
+      clearTimeout(timeout);
+      listener?.subscription?.unsubscribe();
     };
   }, []);
 
@@ -86,19 +111,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    const currentUserId = session?.user?.id;
+    if (currentUserId) {
+      try {
+        await fetch(`/api/coop/invite?userId=${encodeURIComponent(currentUserId)}`, {
+          method: 'DELETE',
+        });
+      } catch {
+        // Silently continue
+      }
+    }
     const supabase = getSupabaseClient();
     if (!supabase) return;
     setError(null);
-    const { data: currentSession } = await supabase.auth.getSession();
-    if (currentSession.session?.access_token) {
-      await fetch('/api/coop/invite', {
-        method: 'DELETE',
-        headers: { authorization: `Bearer ${currentSession.session.access_token}` },
-      }).catch(() => undefined);
-    }
     const { error: authError } = await supabase.auth.signOut();
     if (authError) setError(authError.message);
-  }, []);
+  }, [session?.user?.id]);
 
   const user = session?.user ?? null;
   const displayName = useMemo(() => {

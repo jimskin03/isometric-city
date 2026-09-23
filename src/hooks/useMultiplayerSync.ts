@@ -97,6 +97,31 @@ export function useMultiplayerSync() {
     }
   }, [canonicalRoomState, game]);
 
+  // Immediate canonical state fallback for fresh browsers, incognito, or headless agents
+  useEffect(() => {
+    if (initialStateLoadedRef.current) return;
+    let isMounted = true;
+    fetch('/api/coop/canonical-state')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted || !data.ok || !data.gameState || initialStateLoadedRef.current) return;
+        const canonical = {
+          ...data.gameState,
+          selectedTool: game.state.selectedTool,
+          activePanel: game.state.activePanel,
+        };
+        const success = game.loadState(JSON.stringify(canonical));
+        if (success) {
+          initialStateLoadedRef.current = true;
+        }
+      })
+      .catch((err) => console.warn('[useMultiplayerSync] Canonical fallback fetch error:', err));
+
+    return () => {
+      isMounted = false;
+    };
+  }, [game]);
+
   // Apply a remote action to the local game state
   const applyRemoteAction = useCallback((action: GameAction) => {
     // Guard against null/undefined actions (can happen with malformed broadcasts)

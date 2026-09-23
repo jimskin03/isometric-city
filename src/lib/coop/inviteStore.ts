@@ -259,3 +259,7 @@ export async function getCoopInviteByUserId(userId: string): Promise<CoopInvite 
   }
   return cacheInvite(invite);
 }
+
+export function listActiveInvites(): CoopInvite[] {
+  return Array.from(store().byCode.values()).filter((i) => !isExpired(i));
+}

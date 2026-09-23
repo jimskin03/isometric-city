@@ -70,7 +70,18 @@ export function SessionChat({ className = '', mobile = false }: { className?: st
           <button type="submit" className="px-3 text-slate-400 hover:text-white" aria-label="Send message"><Send className="h-4 w-4" /></button>
         </form>
       ) : (
-        <div className="border-t border-slate-800 px-3 py-2 text-[11px] text-slate-500">Chat is read-only for spectators. Sign in or enter an invite code to chat.</div>
+        <div className="flex items-center justify-between border-t border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-400">
+          <span className="text-[11px] text-slate-400">Chat is read-only for spectators.</span>
+          {coop?.setOpenJoinDialog && (
+            <button
+              type="button"
+              onClick={() => coop.setOpenJoinDialog(true)}
+              className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium hover:underline shrink-0"
+            >
+              Enter invite code
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

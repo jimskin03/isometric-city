@@ -92,25 +92,94 @@ export function AgentBridge() {
       );
     };
 
+    const reportResult = async (result: import('@/lib/agent/protocol').CommandExecutionResult) => {
+      try {
+        await fetch('/api/agent/commands', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ result }),
+        });
+      } catch (err) {
+        console.warn('Failed to report command result:', err);
+      }
+    };
+
     const executeCommand = (envelope: AgentCommandEnvelope) => {
       const command = envelope.command;
+      const state = latestStateRef.current;
       switch (command.type) {
-        case 'place':
-          executeToolAtTile(command.tool, command.x, command.y);
-          break;
-        case 'batch_place':
-          for (const action of command.actions.slice(0, 250)) {
-            executeToolAtTile(action.tool, action.x, action.y);
+        case 'place': {
+          const inBounds = command.x >= 0 && command.x < state.gridSize && command.y >= 0 && command.y < state.gridSize;
+          if (!inBounds) {
+            void reportResult({
+              commandId: envelope.id,
+              status: 'rejected',
+              appliedAt: Date.now(),
+              totalCostCharged: 0,
+              reason: 'out_of_bounds',
+            });
+            return;
           }
+          executeToolAtTile(command.tool, command.x, command.y);
+          void reportResult({
+            commandId: envelope.id,
+            status: 'applied',
+            appliedAt: Date.now(),
+            totalCostCharged: 0,
+            actionResults: [{
+              tool: command.tool,
+              x: command.x,
+              y: command.y,
+              status: 'applied',
+              costCharged: 0,
+            }],
+          });
           break;
+        }
+        case 'batch_place': {
+          const actionResults: import('@/lib/agent/protocol').ActionExecutionResult[] = [];
+          for (const action of command.actions.slice(0, 250)) {
+            const inBounds = action.x >= 0 && action.x < state.gridSize && action.y >= 0 && action.y < state.gridSize;
+            if (inBounds) {
+              executeToolAtTile(action.tool, action.x, action.y);
+              actionResults.push({
+                tool: action.tool,
+                x: action.x,
+                y: action.y,
+                status: 'applied',
+                costCharged: 0,
+              });
+            } else {
+              actionResults.push({
+                tool: action.tool,
+                x: action.x,
+                y: action.y,
+                status: 'rejected',
+                costCharged: 0,
+                reason: 'out_of_bounds',
+              });
+            }
+          }
+          void reportResult({
+            commandId: envelope.id,
+            status: actionResults.some((r) => r.status === 'applied') ? 'applied' : 'rejected',
+            appliedAt: Date.now(),
+            totalCostCharged: 0,
+            actionResults,
+          });
+          break;
+        }
         case 'set_speed':
           setSpeed(1);
+          void reportResult({ commandId: envelope.id, status: 'applied', appliedAt: Date.now(), totalCostCharged: 0 });
           break;
         case 'set_tax':
           setTaxRate(command.rate);
+          void reportResult({ commandId: envelope.id, status: 'applied', appliedAt: Date.now(), totalCostCharged: 0 });
           break;
         case 'bootstrap_city':
           executeFounder();
+          void reportResult({ commandId: envelope.id, status: 'applied', appliedAt: Date.now(), totalCostCharged: 0 });
           break;
         case 'chat': {
           const mp = multiplayerRef.current;
@@ -121,6 +190,7 @@ export function AgentBridge() {
               type: 'agent',
             });
           }
+          void reportResult({ commandId: envelope.id, status: 'applied', appliedAt: Date.now(), totalCostCharged: 0 });
           break;
         }
       }

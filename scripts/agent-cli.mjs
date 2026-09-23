@@ -12,10 +12,10 @@ function takeFlag(name) {
 
 const baseUrl = (takeFlag('--url') || process.env.PARADISE_CITY_URL || 'http://localhost:3000').replace(/\/$/, '');
 const explicitSessionId = takeFlag('--session');
+const inviteCode = takeFlag('--invite') || process.env.PARADISE_INVITE_CODE;
 const agentName = takeFlag('--agent') || process.env.PARADISE_AGENT_NAME || 'Paradise Agent';
 const agentId = takeFlag('--agent-id') || process.env.PARADISE_AGENT_ID || `agent-${agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'planner'}`;
 const token = process.env.PARADISE_AGENT_TOKEN;
-const inviteCode = takeFlag('--invite') || process.env.PARADISE_INVITE_CODE;
 const actor = { id: agentId, name: agentName };
 const [action, ...args] = argv;
 
@@ -43,7 +43,7 @@ async function queue(command, positionalSessionId) {
   return request('/api/agent/commands', {
     method: 'POST',
     headers: headers(true),
-    body: JSON.stringify({ sessionId, command, actor }),
+    body: JSON.stringify({ sessionId, command, actor, inviteCode }),
   });
 }
 
@@ -51,26 +51,30 @@ function usage() {
   console.log(`Paradise City agent CLI
 
 Usage:
-  npm run agent -- state [sessionId] [--session ID] [--url URL]
+  npm run agent -- readiness [sessionId] [--url URL]
+  npm run agent -- state [sessionId] [--session ID] [--url URL] [--invite CODE]
+  npm run agent -- result <commandId> [--url URL]
+  npm run agent -- step [count] [--url URL] [--invite CODE]
   npm run agent -- instructions [--url URL]
-  npm run agent -- bootstrap [sessionId] [--agent NAME] [--session ID]
-  npm run agent -- place <tool> <x> <y> [sessionId] [--agent NAME]
-  npm run agent -- speed 1 [sessionId] [--agent NAME]
-  npm run agent -- tax <0-100> [sessionId] [--agent NAME]
-  npm run agent -- chat <message> [sessionId] [--agent NAME]
+  npm run agent -- bootstrap [sessionId] [--agent NAME] [--session ID] [--invite CODE]
+  npm run agent -- place <tool> <x> <y> [sessionId] [--agent NAME] [--invite CODE]
+  npm run agent -- speed 1 [sessionId] [--agent NAME] [--invite CODE] (simulation runs strictly at 1X)
+  npm run agent -- tax <0-100> [sessionId] [--agent NAME] [--invite CODE]
+  npm run agent -- chat <message> [sessionId] [--agent NAME] [--invite CODE]
 
 Global flags:
   --url URL             Paradise City server URL
   --session ID          Browser/agent bridge session ID (defaults to the live publishing session)
   --agent NAME          Agent display name, e.g. A.Ira
   --agent-id ID         Stable machine identity for the agent
-  --invite CODE          Co-op invite code (valid for 24 hours)
+  --invite CODE         Co-op invite code (valid for 24 hours / join & build without signing up)
 
 Simulation speed is locked to 1x for invited guests and agents.
 
 Environment:
   PARADISE_CITY_URL
   PARADISE_AGENT_TOKEN
+  PARADISE_INVITE_CODE
   PARADISE_AGENT_NAME
   PARADISE_AGENT_ID
   PARADISE_INVITE_CODE
@@ -80,6 +84,29 @@ For shared sessions, state.sharedSession contains the room code, participants an
 
 let result;
 switch (action) {
+  case 'readiness': {
+    const sessionId = explicitSessionId || args[0];
+    result = await request(`/api/agent/readiness${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`, { headers: headers() });
+    break;
+  }
+  case 'result': {
+    const commandId = args[0];
+    if (!commandId) {
+      usage();
+      process.exit(1);
+    }
+    result = await request(`/api/agent/commands?commandId=${encodeURIComponent(commandId)}`, { headers: headers() });
+    break;
+  }
+  case 'step': {
+    const steps = Number(args[0]) || 1;
+    result = await request('/api/agent/step', {
+      method: 'POST',
+      headers: headers(true),
+      body: JSON.stringify({ steps }),
+    });
+    break;
+  }
   case 'state': {
     const sessionId = explicitSessionId || args[0];
     result = await request(`/api/agent/state${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`, { headers: headers() });

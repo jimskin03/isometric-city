@@ -15,6 +15,7 @@ import { T } from 'gt-next';
 import { X } from 'lucide-react';
 import { PARADISE_CITY } from '@/config/paradise';
 import { CryptGregAuthWidget } from '@/components/auth/CryptGregAuthWidget';
+import { ReadinessProvider } from '@/context/ReadinessContext';
 
 const STORAGE_KEY = PARADISE_CITY.storage.gameState;
 const SAVED_CITIES_INDEX_KEY = PARADISE_CITY.storage.savedCitiesIndex;
@@ -328,9 +329,11 @@ function UnifiedGameRuntime() {
 
   return (
     <GameProvider simulationEnabled={shouldSimulate} startFresh={false}>
-      <main className="h-screen w-screen overflow-hidden select-none bg-background">
-        <Game />
-      </main>
+      <ReadinessProvider>
+        <main className="h-screen w-screen overflow-hidden select-none bg-background">
+          <Game />
+        </main>
+      </ReadinessProvider>
     </GameProvider>
   );
 }
