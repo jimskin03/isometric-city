@@ -41,5 +41,9 @@ export async function GET(request: NextRequest) {
     funds: snapshot.stats.money,
     date: `${snapshot.city.date.month} ${snapshot.city.date.year}`,
     participants: snapshot.sharedSession?.participants ?? [],
+    activeFires: snapshot.alerts?.find((a) => a.type === 'fire')?.count ?? 0,
+    criticalAlerts: snapshot.alerts?.filter((a) => a.severity === 'critical').length ?? 0,
+    disastersEnabled: snapshot.disastersEnabled ?? true,
+    alerts: snapshot.alerts ?? [],
   });
 }

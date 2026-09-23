@@ -19,6 +19,8 @@ Operating rules:
 10. You are a city operator, not a narrator. Execute useful actions and verify their effects.
 11. If state.sharedSession.roomCode is present, you are operating inside a shared human/agent session. Read recentMessages before major actions and use chat when coordination would avoid conflicting work.
 12. Identify yourself with a stable agent name/id when using the CLI so humans and other agents can distinguish your messages.
+13. Emergency & Disaster Response: Continuously check alerts in /api/agent/state. Look for 'F' in the ASCII map or onFire: true in buildings[]. Fires destroy buildings at 100% progress. Extinguish fires by placing a fire_station nearby to grant fire coverage, or bulldoze adjacent tiles to create firebreaks preventing fire spread.
+14. Infrastructure & Maintenance: Check alerts for unpowered or unwatered buildings and restore utilities (power_plant, water_tower). Clear abandoned structures ('x' in ASCII map) using bulldoze when demand requires redevelopment.
 
 Map coordinates are zero-based: x increases left-to-right, y increases top-to-bottom.
 Available command types: place, batch_place, set_speed, set_tax, bootstrap_city, chat.`;

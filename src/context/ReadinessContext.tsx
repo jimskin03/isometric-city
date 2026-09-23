@@ -32,6 +32,9 @@ export interface AgentReadinessContract {
   lastTickAt: number;
   lastStateChangeAt: number;
   lastPublisherSeenAt: number;
+  activeFires: number;
+  criticalAlerts: number;
+  disastersEnabled: boolean;
   error?: {
     code: string;
     message: string;
@@ -70,6 +73,21 @@ export function ReadinessProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     gLastTickAt = Date.now();
   }, [currentMonth, currentYear, currentDay]);
+
+  // Derive active fires and alerts
+  const activeFires = useMemo(() => {
+    if (!game?.state?.grid) return 0;
+    let fires = 0;
+    for (const row of game.state.grid) {
+      for (const tile of row) {
+        if (tile?.building?.onFire) fires++;
+      }
+    }
+    return fires;
+  }, [game?.state?.grid]);
+
+  const disastersEnabled = game?.state?.disastersEnabled ?? true;
+  const criticalAlerts = activeFires > 0 ? 1 : 0;
 
   // Derive boot phase purely from underlying context states without setState
   let phase: BootPhase = 'ready';
@@ -124,9 +142,12 @@ export function ReadinessProvider({ children }: { children: React.ReactNode }) {
       lastTickAt: gLastTickAt,
       lastStateChangeAt: gLastStateChangeAt,
       lastPublisherSeenAt: gLastStateChangeAt || gLastTickAt || 0,
+      activeFires,
+      criticalAlerts,
+      disastersEnabled,
       error: null,
     };
-  }, [phase, multiplayer?.roomCode, game?.state?.id, game?.state?.cityName, stateVersion, canBuild, authenticatedActor, simulationTick]);
+  }, [phase, multiplayer?.roomCode, game?.state?.id, game?.state?.cityName, stateVersion, canBuild, authenticatedActor, simulationTick, activeFires, criticalAlerts, disastersEnabled]);
 
   // Expose to window.__PARADISE_READINESS__ for headless Chromium and automated tools
   useEffect(() => {
@@ -150,6 +171,9 @@ export function ReadinessProvider({ children }: { children: React.ReactNode }) {
         data-city-name={readiness.cityName}
         data-simulation-tick={readiness.simulationTick}
         data-state-version={readiness.stateVersion}
+        data-active-fires={readiness.activeFires}
+        data-critical-alerts={readiness.criticalAlerts}
+        data-disasters-enabled={readiness.disastersEnabled ? 'true' : 'false'}
       />
       {children}
     </ReadinessContext.Provider>

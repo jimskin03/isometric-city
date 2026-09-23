@@ -48,6 +48,16 @@ export type CommandExecutionResult = {
   actionResults?: ActionExecutionResult[];
 };
 
+export type CityAlert = {
+  id: string;
+  type: 'fire' | 'abandoned' | 'unpowered' | 'unwatered' | 'crime' | 'pollution' | 'budget_deficit';
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  description: string;
+  count: number;
+  locations?: Array<{ x: number; y: number }>;
+};
+
 export type AgentCitySnapshot = {
   sessionId: string;
   observedAt: number;
@@ -65,6 +75,21 @@ export type AgentCitySnapshot = {
     taxRate: number;
   };
   stats: GameState['stats'];
+  disastersEnabled: boolean;
+  alerts: CityAlert[];
+  notifications: Array<{ id: string; title: string; description: string; timestamp: number }>;
+  advisorMessages: Array<{ name: string; messages: string[]; priority: string }>;
+  servicesSummary: {
+    fireCoverageAvg: number;
+    policeCoverageAvg: number;
+    healthCoverageAvg: number;
+    educationCoverageAvg: number;
+  };
+  budget?: {
+    totalIncome: number;
+    totalExpenses: number;
+    categories: Record<string, { funding: number; cost: number }>;
+  };
   map: {
     legend: Record<string, string>;
     rows: string[];
@@ -81,6 +106,9 @@ export type AgentCitySnapshot = {
     zone: string;
     powered: boolean;
     watered: boolean;
+    onFire?: boolean;
+    fireProgress?: number;
+    abandoned?: boolean;
     constructionProgress?: number;
     capacity?: number;
     jobs?: number;
@@ -90,6 +118,8 @@ export type AgentCitySnapshot = {
 
 function tileSymbol(state: GameState, x: number, y: number): string {
   const tile = state.grid[y][x];
+  if (tile.building.onFire) return 'F';
+  if (tile.building.abandoned) return 'x';
   const type = tile.building.type;
   if (type === 'water') return '~';
   if (type === 'road' || type === 'bridge') return '=';
@@ -108,9 +138,43 @@ export function createAgentSnapshot(
   sharedSession?: AgentCitySnapshot['sharedSession'],
 ): AgentCitySnapshot {
   const buildings: AgentCitySnapshot['buildings'] = [];
+  const fireLocations: Array<{ x: number; y: number }> = [];
+  const abandonedLocations: Array<{ x: number; y: number }> = [];
+  const unpoweredLocations: Array<{ x: number; y: number }> = [];
+  const unwateredLocations: Array<{ x: number; y: number }> = [];
+
+  let totalFireCov = 0;
+  let totalPoliceCov = 0;
+  let totalHealthCov = 0;
+  let totalEduCov = 0;
+  let tileCount = 0;
+
   const rows = state.grid.map((row, y) =>
     row.map((tile, x) => {
-      if (!['grass', 'empty', 'water', 'tree', 'road', 'rail', 'bridge'].includes(tile.building.type)) {
+      tileCount++;
+      if (state.services) {
+        if (state.services.fire?.[y]?.[x] !== undefined) totalFireCov += state.services.fire[y][x];
+        if (state.services.police?.[y]?.[x] !== undefined) totalPoliceCov += state.services.police[y][x];
+        if (state.services.health?.[y]?.[x] !== undefined) totalHealthCov += state.services.health[y][x];
+        if (state.services.education?.[y]?.[x] !== undefined) totalEduCov += state.services.education[y][x];
+      }
+
+      const isNonEmpty = !['grass', 'empty', 'water', 'tree', 'road', 'rail', 'bridge'].includes(tile.building.type);
+
+      if (tile.building.onFire) {
+        fireLocations.push({ x, y });
+      }
+      if (tile.building.abandoned) {
+        abandonedLocations.push({ x, y });
+      }
+      if (isNonEmpty && !tile.building.powered) {
+        unpoweredLocations.push({ x, y });
+      }
+      if (isNonEmpty && !tile.building.watered) {
+        unwateredLocations.push({ x, y });
+      }
+
+      if (isNonEmpty) {
         buildings.push({
           x,
           y,
@@ -118,6 +182,9 @@ export function createAgentSnapshot(
           zone: tile.zone,
           powered: Boolean(tile.building.powered),
           watered: Boolean(tile.building.watered),
+          onFire: Boolean(tile.building.onFire),
+          fireProgress: tile.building.fireProgress ?? 0,
+          abandoned: Boolean(tile.building.abandoned),
           constructionProgress: tile.building.constructionProgress ?? 100,
           level: tile.building.level ?? 1,
         });
@@ -125,6 +192,85 @@ export function createAgentSnapshot(
       return tileSymbol(state, x, y);
     }).join(''),
   );
+
+  const alerts: CityAlert[] = [];
+
+  if (fireLocations.length > 0) {
+    alerts.push({
+      id: 'alert-fire',
+      type: 'fire',
+      severity: 'critical',
+      title: 'Fire Outbreak',
+      description: `${fireLocations.length} building(s) currently burning! Extinguish with fire station coverage or bulldoze adjacent tiles as firebreaks.`,
+      count: fireLocations.length,
+      locations: fireLocations.slice(0, 50),
+    });
+  }
+
+  if (abandonedLocations.length > 0) {
+    alerts.push({
+      id: 'alert-abandoned',
+      type: 'abandoned',
+      severity: 'warning',
+      title: 'Abandoned Buildings',
+      description: `${abandonedLocations.length} building(s) abandoned. Clear with bulldoze or improve demand and service coverage.`,
+      count: abandonedLocations.length,
+      locations: abandonedLocations.slice(0, 50),
+    });
+  }
+
+  if (unpoweredLocations.length > 0) {
+    alerts.push({
+      id: 'alert-unpowered',
+      type: 'unpowered',
+      severity: 'warning',
+      title: 'Power Outages',
+      description: `${unpoweredLocations.length} building(s) lack electrical power. Build power plants or ensure power connectivity.`,
+      count: unpoweredLocations.length,
+      locations: unpoweredLocations.slice(0, 50),
+    });
+  }
+
+  if (unwateredLocations.length > 0) {
+    alerts.push({
+      id: 'alert-unwatered',
+      type: 'unwatered',
+      severity: 'warning',
+      title: 'Water Outages',
+      description: `${unwateredLocations.length} building(s) lack water service. Build water towers.`,
+      count: unwateredLocations.length,
+      locations: unwateredLocations.slice(0, 50),
+    });
+  }
+
+  if (state.stats && state.stats.expenses > state.stats.income) {
+    alerts.push({
+      id: 'alert-deficit',
+      type: 'budget_deficit',
+      severity: 'warning',
+      title: 'Monthly Deficit',
+      description: `Expenses ($${state.stats.expenses}/mo) exceed income ($${state.stats.income}/mo). Net burn: -$${state.stats.expenses - state.stats.income}/mo.`,
+      count: 1,
+    });
+  }
+
+  const servicesSummary = {
+    fireCoverageAvg: tileCount > 0 ? Math.round(totalFireCov / tileCount) : 0,
+    policeCoverageAvg: tileCount > 0 ? Math.round(totalPoliceCov / tileCount) : 0,
+    healthCoverageAvg: tileCount > 0 ? Math.round(totalHealthCov / tileCount) : 0,
+    educationCoverageAvg: tileCount > 0 ? Math.round(totalEduCov / tileCount) : 0,
+  };
+
+  const budgetSummary = state.budget
+    ? {
+        totalIncome: state.stats?.income || 0,
+        totalExpenses: state.stats?.expenses || 0,
+        categories: Object.entries(state.budget).reduce((acc, [cat, val]) => {
+          acc[cat] = { funding: val.funding, cost: val.cost };
+          return acc;
+        }, {} as Record<string, { funding: number; cost: number }>),
+      }
+    : undefined;
 
   const now = Date.now();
   const ticks = (state.stats.population || 0) + (state.stats.jobs || 0) + (state.month || 0);
@@ -146,6 +292,21 @@ export function createAgentSnapshot(
       taxRate: state.taxRate,
     },
     stats: state.stats,
+    disastersEnabled: Boolean(state.disastersEnabled),
+    alerts,
+    notifications: (state.notifications || []).slice(-10).map((n) => ({
+      id: n.id,
+      title: n.title,
+      description: n.description,
+      timestamp: n.timestamp,
+    })),
+    advisorMessages: (state.advisorMessages || []).map((m) => ({
+      name: m.name,
+      messages: m.messages,
+      priority: m.priority,
+    })),
+    servicesSummary,
+    budget: budgetSummary,
     sharedSession,
     map: {
       legend: {
@@ -158,6 +319,8 @@ export function createAgentSnapshot(
         c: 'commercial zone',
         i: 'industrial zone',
         B: 'civic/special building',
+        F: 'building on fire (EMERGENCY)',
+        x: 'abandoned building',
       },
       rows,
     },

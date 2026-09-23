@@ -53,6 +53,7 @@ function usage() {
 Usage:
   npm run agent -- readiness [sessionId] [--url URL]
   npm run agent -- state [sessionId] [--session ID] [--url URL] [--invite CODE]
+  npm run agent -- alerts [sessionId] [--url URL]
   npm run agent -- result <commandId> [--url URL]
   npm run agent -- step [count] [--url URL] [--invite CODE]
   npm run agent -- instructions [--url URL]
@@ -115,6 +116,24 @@ switch (action) {
   case 'instructions':
     result = await request('/api/agent/instructions', { headers: headers() });
     break;
+  case 'alerts': {
+    const sessionId = explicitSessionId || args[0];
+    const statePayload = await request(`/api/agent/state${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`, { headers: headers() });
+    if (statePayload && statePayload.snapshot) {
+      result = {
+        ok: true,
+        cityName: statePayload.snapshot.city.name,
+        disastersEnabled: statePayload.snapshot.disastersEnabled,
+        alerts: statePayload.snapshot.alerts || [],
+        servicesSummary: statePayload.snapshot.servicesSummary,
+        notifications: statePayload.snapshot.notifications || [],
+        advisorMessages: statePayload.snapshot.advisorMessages || [],
+      };
+    } else {
+      result = statePayload;
+    }
+    break;
+  }
   case 'bootstrap':
     result = await queue({ type: 'bootstrap_city' }, args[0]);
     break;
@@ -167,4 +186,14 @@ switch (action) {
     process.exit(action ? 1 : 0);
 }
 
-if (result) console.log(JSON.stringify(result, null, 2));
+if (result) {
+  const alerts = result.alerts || result.snapshot?.alerts;
+  if (Array.isArray(alerts) && alerts.some((a) => a.severity === 'critical')) {
+    console.error('\n⚠️ [EMERGENCY ALERT] Active critical disasters in Paradise City:');
+    for (const a of alerts.filter((a) => a.severity === 'critical')) {
+      console.error(`  - ${a.title}: ${a.description} (count: ${a.count})`);
+    }
+    console.error('');
+  }
+  console.log(JSON.stringify(result, null, 2));
+}
