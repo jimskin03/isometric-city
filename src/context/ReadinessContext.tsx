@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import { useAuth } from '@/context/AuthContext';
 import { useCoop } from '@/context/CoopContext';
 import { useMultiplayerOptional } from '@/context/MultiplayerContext';
-import { useGame } from '@/context/GameContext';
+import { useGameOptional } from '@/context/GameContext';
 import { PARADISE_CITY } from '@/config/paradise';
 
 export type BootPhase =
@@ -54,19 +54,19 @@ export function ReadinessProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading, displayName } = useAuth();
   const { isCoopWithCode, coopGuestInfo } = useCoop();
   const multiplayer = useMultiplayerOptional();
-  const game = useGame();
+  const game = useGameOptional();
 
   const canBuild = !!user || isCoopWithCode;
 
   // Track timestamps in effects
-  const currentGameVersion = game.state.gameVersion;
+  const currentGameVersion = game?.state?.gameVersion;
   useEffect(() => {
     gLastStateChangeAt = Date.now();
   }, [currentGameVersion]);
 
-  const currentMonth = game.state.month;
-  const currentYear = game.state.year;
-  const currentDay = game.state.day;
+  const currentMonth = game?.state?.month;
+  const currentYear = game?.state?.year;
+  const currentDay = game?.state?.day;
   useEffect(() => {
     gLastTickAt = Date.now();
   }, [currentMonth, currentYear, currentDay]);
@@ -77,14 +77,15 @@ export function ReadinessProvider({ children }: { children: React.ReactNode }) {
     phase = 'loading_auth';
   } else if (multiplayer && multiplayer.connectionState === 'connecting') {
     phase = 'joining_room';
-  } else if (!game.isStateReady) {
+  } else if (!game || !game.isStateReady) {
     phase = 'loading_city';
   }
 
   // Derive simulation tick and state version directly from game state
-  const simulationTick =
-    (game.state.year - 2024) * 360 + game.state.month * 30 + game.state.day;
-  const stateVersion = game.state.gameVersion || 1;
+  const simulationTick = game
+    ? (game.state.year - 2024) * 360 + game.state.month * 30 + game.state.day
+    : 0;
+  const stateVersion = game?.state?.gameVersion || 1;
 
   const authenticatedActor = useMemo(() => {
     if (user) {
@@ -114,8 +115,8 @@ export function ReadinessProvider({ children }: { children: React.ReactNode }) {
       ready: isReady,
       phase,
       roomCode: multiplayer?.roomCode || PARADISE_CITY.unifiedRoomCode,
-      cityId: game.state.id || null,
-      cityName: game.state.cityName || PARADISE_CITY.name,
+      cityId: game?.state?.id || null,
+      cityName: game?.state?.cityName || PARADISE_CITY.name,
       canBuild,
       authenticatedActor,
       stateVersion,
@@ -125,7 +126,7 @@ export function ReadinessProvider({ children }: { children: React.ReactNode }) {
       lastPublisherSeenAt: gLastStateChangeAt || gLastTickAt || 0,
       error: null,
     };
-  }, [phase, multiplayer?.roomCode, game.state.id, game.state.cityName, stateVersion, canBuild, authenticatedActor, simulationTick]);
+  }, [phase, multiplayer?.roomCode, game?.state?.id, game?.state?.cityName, stateVersion, canBuild, authenticatedActor, simulationTick]);
 
   // Expose to window.__PARADISE_READINESS__ for headless Chromium and automated tools
   useEffect(() => {

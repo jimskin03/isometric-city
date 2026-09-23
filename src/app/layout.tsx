@@ -7,7 +7,6 @@ import { GTProvider } from "gt-next";
 import { PARADISE_CITY } from '@/config/paradise';
 import { AuthProvider } from '@/context/AuthContext';
 import { CoopProvider } from '@/context/CoopContext';
-import { ReadinessProvider } from '@/context/ReadinessContext';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -87,7 +86,7 @@ export default async function RootLayout({ children }: {children: React.ReactNod
         type="image/webp" />
 
       </head>
-      <body className="bg-background text-foreground antialiased font-sans overflow-hidden"><GTProvider><AuthProvider><CoopProvider><ReadinessProvider>{children}</ReadinessProvider></CoopProvider></AuthProvider><Analytics /></GTProvider></body>
+      <body className="bg-background text-foreground antialiased font-sans overflow-hidden"><GTProvider><AuthProvider><CoopProvider>{children}</CoopProvider></AuthProvider><Analytics /></GTProvider></body>
     </html>
   );
 }

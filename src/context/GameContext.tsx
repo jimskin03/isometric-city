@@ -1565,3 +1565,7 @@ export function useGame() {
   }
   return ctx;
 }
+
+export function useGameOptional() {
+  return useContext(GameContext);
+}
